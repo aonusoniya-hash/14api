@@ -116,6 +116,8 @@ class ScrapeRequest(BaseModel):
             "motherlessmedia.com",
             "youjizz.com",
             "pornone.com",
+            "3movs.com",
+            "img.3movs.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -225,6 +227,8 @@ class ListRequest(BaseModel):
             "motherlessmedia.com",
             "youjizz.com",
             "pornone.com",
+            "3movs.com",
+            "img.3movs.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v

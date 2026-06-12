@@ -3337,4 +3337,64 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=pornone"
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://pornone.com/foursome/french-teen-ang-granny-fucked-by-young-guys-in-good-foursome/280598663/"
 ```
 
+## 3Movs (3movs.com) Implementation Notes
+
+[3Movs](https://www.3movs.com/) is a KVS (Kernel Video Sharing) tube site using `kt_player` with inline `flashvars` on watch pages. Watch URLs use a numeric ID and slug: `https://www.3movs.com/videos/{id}/{slug}/` (e.g. `/videos/455161/hot-teen-erika-slips-out-of-her-lingerie/`). Embed fallback: `https://www.3movs.com/embed/{id}`.
+
+### Host aliases
+
+- `3movs.com`
+- `www.3movs.com`
+- `img.3movs.com` (thumbnails/CDN)
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://www.3movs.com/` (page 2+ uses `/latest-updates/{page}/`)
+- Latest: `https://www.3movs.com/latest-updates/` (page 2+ → `/latest-updates/2/`)
+- Sort feeds: `/most-popular/`, `/top-rated/week/`, `/most-viewed/week/`, `/longest/`
+- Categories: `/categories/{slug}/` (page 2+ → `/categories/{slug}/2/`)
+- Parse `.thumbs .item.thumb` blocks: `a.wrap_image`, `img[data-src]`, `.time`, `.icon-eye` sibling span
+- Preview clips from `img[data-preview]` (short MP4 previews)
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch — plain httpx/aiohttp may TLS-timeout on this host.
+
+### Metadata and streams (`scrape`)
+
+- **Primary streams:** `flashvars.video_url` (HQ) and `flashvars.video_alt_url` (LQ) — both are `/get_file/...` URLs
+- **Fallback:** download links (`360p - Free Download`), embed URL
+- Resolve `/get_file/` via HEAD/GET redirect to signed CDN (`*.mjedge.net` or similar)
+- Metadata: `og:title`, `og:image`, `ul.list_info` (duration/views/date), `flashvars.video_models`, `flashvars.video_tags`
+
+### Categories (`get_categories`)
+
+Home, Latest Updates, sort feeds, and sample category slugs in `categories.json`.
+
+### Registration checklist for 3Movs
+
+Package folder: `backend/app/scrapers/threemovs/` (Python module name; source aliases: `3movs`, `threemovs`).
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="3movs"`)
+
+### 3Movs verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.3movs.com/videos/455161/hot-teen-erika-slips-out-of-her-lingerie/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.3movs.com/latest-updates/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.3movs.com/categories/anal/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=3movs"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.3movs.com/videos/455161/hot-teen-erika-slips-out-of-her-lingerie/"
+```
+
 
