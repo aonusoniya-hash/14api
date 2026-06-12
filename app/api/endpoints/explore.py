@@ -873,19 +873,7 @@ EXPLORE_SOURCES = [
         disable=False,
         pageSize=20,
     ),
-    ExploreSourceResponse(
-        baseUrl="https://www.bilibili.com/",
-        nickname="Bilibili",
-        favicon="https://www.bilibili.com/favicon.ico",
-        accentColor="#00A1D6",
-        category="anime",
-        isVerified=False,
-        hasCategories=False,
-        searchUrlTemplate="",
-        sourceId="bilibili",
-        disable=False,
-        pageSize=20,
-    ),
+
     ExploreSourceResponse(
         baseUrl="https://51cg1.com/",
         nickname="51吃瓜",
