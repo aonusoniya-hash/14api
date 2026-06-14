@@ -313,14 +313,6 @@ DUMMY_MEDIA_CONFIG = MediaConfigData(
                     playlist_url="https://raw.githubusercontent.com/konanda-sg/stream99/refs/heads/main/live_tv_channels.m3u",
                 ),
                 MediaCategoryResponse(
-                    id="konanda_sg_bigboy",
-                    title="BiGBoY",
-                    type="live",
-                    logo_url="https://apkfolder.io/wp-content/uploads/2026/03/fc.webp",
-                    color_hex="#FF5722",
-                    playlist_url="https://raw.githubusercontent.com/konanda-sg/MPD/refs/heads/main/BiGBoY",
-                ),
-                MediaCategoryResponse(
                     id="konanda_sg_favourites",
                     title="Favourites",
                     type="live",
@@ -506,11 +498,20 @@ DUMMY_MEDIA_CONFIG = MediaConfigData(
             categories=[
                 MediaCategoryResponse(
                     id="adult_18",
-                    title="Adult (18+)",
+                    title="Adult 1 (18+)",
                     type="vod",
                     logo_url="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/18-plus-age-restriction-icon.svg",
                     color_hex="#F44336",
                     playlist_url="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/adult.m3u",
+                    requires_pin=False,
+                ),
+                 MediaCategoryResponse(
+                    id="adult_2_18",
+                    title="Adult 2 (18+)",
+                    type="vod",
+                    logo_url="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/18-plus-age-restriction-icon.svg",
+                    color_hex="#F44336",
+                    playlist_url="https://raw.githubusercontent.com/konanda-sg/MPD/refs/heads/main/BiGBoY",
                     requires_pin=False,
                 ),
             ],
@@ -527,5 +528,3 @@ async def get_media_providers() -> MediaConfigResponse:
         status="success",
         data=DUMMY_MEDIA_CONFIG
     )
-
-
