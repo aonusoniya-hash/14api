@@ -29,10 +29,10 @@ async def get_notifications():
         ),
         NotificationItem(
             id="2",
-            title="AppHub v10 Update Released",
+            title="AppHub v12 Update Released",
             message="Check out the latest update with new features and improvements! Available on AppTeka/AppHub Store and Official Telegram channel",
             type="update",
-            created_at=datetime(2026, 5, 25),
+            created_at=datetime(2026, 6, 14),
         ),
     ]
     return NotificationResponse(
