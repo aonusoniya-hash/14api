@@ -3397,4 +3397,65 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=3movs"
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.3movs.com/videos/455161/hot-teen-erika-slips-out-of-her-lingerie/"
 ```
 
+## PornDig (porndig.com) Implementation Notes
+
+[PornDig](https://www.porndig.com/) is a modern tube site using a custom VHS player on `videos.porndig.com`. Watch URLs use a numeric post ID and slug: `https://www.porndig.com/videos/{id}/{slug}.html` (e.g. `/videos/254839/hayley-davies-hopes-he-ll-shove-it-all-the-way-inside-her.html`).
+
+### Host aliases
+
+- `porndig.com`
+- `www.porndig.com`
+- `videos.porndig.com` (embed player)
+- `video-cdn.porndig.com` (HLS/MP4 streams)
+- `image-cdn.porndig.com` (thumbnails/previews)
+
+### Listing and pagination (`list_videos`)
+
+- Main feed: `https://www.porndig.com/video/` (page 2+ → `/videos/page/{n}/`)
+- Channels: `/channels/{id}/{slug}/` (page 2+ → `?page={n}`)
+- Parse `.video_item_wrapper` blocks: `h2 a`, `img.js_video_preview`, `.bubble_duration`
+- Preview clips from `img[data-vid]` (short MP4 previews on `image-cdn.porndig.com`)
+
+Send `Cookie: dsclcnst=2; discl_s_t=1` to bypass the age disclaimer gate. Use `curl_cffi` (Chrome impersonation) as primary fetch.
+
+### Metadata and streams (`scrape`)
+
+- **Player URL:** extract `videos.porndig.com/player/index/{a}/{b}/{c}` from watch-page iframe/embed textarea
+- **Streams:** fetch player page and parse `window.player_args.push({...})` JSON:
+  - HLS: `src[].type == application/x-mpegurl` → `master.m3u8`
+  - MP4: `src[].type == multi-progressive` → `srcSet[]` with `1080p`, `720p`, `540p`, `360p`
+- **Metadata:** JSON-LD `VideoObject` (`name`, `thumbnailUrl`, `duration`, `uploadDate`, `actor`, `keywords`), `.video_stats` for length/upload date
+
+### Categories (`get_categories`)
+
+Videos hub plus sample `/channels/{id}/{slug}/` entries in `categories.json`.
+
+### Registration checklist for PornDig
+
+Package folder: `backend/app/scrapers/porndig/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="porndig"`)
+
+### PornDig verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.porndig.com/videos/254839/hayley-davies-hopes-he-ll-shove-it-all-the-way-inside-her.html\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.porndig.com/video/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.porndig.com/channels/33/anal/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=porndig"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.porndig.com/videos/254839/hayley-davies-hopes-he-ll-shove-it-all-the-way-inside-her.html"
+```
+
 
