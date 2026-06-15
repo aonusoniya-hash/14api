@@ -103,6 +103,51 @@ def _normalize_media_url(url: str) -> str:
     return u
 
 
+def _is_placeholder_thumb(url: str | None) -> bool:
+    if not url:
+        return True
+    low = str(url).lower()
+    return (
+        low.startswith("data:")
+        or "18plus.svg" in low
+        or "/assets/default/img/" in low
+    )
+
+
+def _thumb_from_img(img: Any) -> Optional[str]:
+    for key in ("src", "data-src", "data-base_url"):
+        raw = img.get(key)
+        if not raw or _is_placeholder_thumb(raw):
+            continue
+        thumb = _normalize_media_url(str(raw).split("?", 1)[0])
+        if not _is_placeholder_thumb(thumb):
+            return thumb
+    return None
+
+
+def _best_list_thumbnail(box: Any) -> tuple[Optional[str], Optional[str]]:
+    """Return (thumbnail_url, preview_url) from a listing card."""
+    preview = None
+    preview_img = box.select_one("img.js_video_preview[data-vid]")
+    if preview_img and preview_img.get("data-vid"):
+        preview = _normalize_media_url(str(preview_img.get("data-vid")))
+
+    for selector in ("img.js_video_preview", "img.thumb_preview"):
+        thumb = _thumb_from_img(box.select_one(selector))
+        if thumb:
+            return thumb, preview
+
+    for img in box.select("img"):
+        classes = img.get("class") or []
+        if "img_18plus" in classes:
+            continue
+        thumb = _thumb_from_img(img)
+        if thumb:
+            return thumb, preview
+
+    return None, preview
+
+
 def _extract_video_id(url: str) -> Optional[str]:
     m = _VIDEO_HREF_RE.search(url or "")
     return m.group("id") if m else None
@@ -269,7 +314,7 @@ def parse_video_page(html: str, url: str, *, player_html: str | None = None) -> 
         _first_non_empty(
             ld.get("name"),
             _meta(soup, prop="og:title"),
-            soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else None,
+            (h1.get_text(" ", strip=True) if (h1 := soup.select_one("h1")) else None),
             soup.title.get_text(strip=True) if soup.title else None,
         )
     ) or "Unknown Video"
@@ -424,18 +469,7 @@ def _parse_list_item(box: Any) -> Optional[dict[str, Any]]:
         )
     ) or "Unknown Video"
 
-    img = box.select_one("img.js_video_preview, img[data-src], img[src]")
-    thumb = None
-    if img:
-        thumb = _first_non_empty(img.get("src"), img.get("data-src"))
-        if thumb:
-            thumb = _normalize_media_url(thumb)
-            if "18plus.svg" in thumb:
-                thumb = _normalize_media_url(img.get("data-src") or "")
-
-    preview = None
-    if img and img.get("data-vid"):
-        preview = _normalize_media_url(str(img.get("data-vid")))
+    thumb, preview = _best_list_thumbnail(box)
 
     duration = None
     dur_el = box.select_one(".bubble_duration span")
