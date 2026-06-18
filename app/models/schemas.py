@@ -127,6 +127,11 @@ class ScrapeRequest(BaseModel):
             "txxx.tube",
             "www.txxx.tube",
             "tn.txxx.tube",
+            "d2eabzntayzi4t.cloudfront.net",
+            "baonai.tv",
+            "www.baonai.tv",
+            "blksptt.bgezuw.cn",
+            "lksqimg.bgezuw.cn",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -247,6 +252,11 @@ class ListRequest(BaseModel):
             "txxx.tube",
             "www.txxx.tube",
             "tn.txxx.tube",
+            "d2eabzntayzi4t.cloudfront.net",
+            "baonai.tv",
+            "www.baonai.tv",
+            "blksptt.bgezuw.cn",
+            "lksqimg.bgezuw.cn",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v

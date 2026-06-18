@@ -48,7 +48,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, baonai
     from app.api.endpoints import thumbnails
     from urllib.parse import urlparse
     
@@ -200,6 +200,8 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = porndig
     elif txxx.can_handle(host):
         scraper_module = txxx
+    elif baonai.can_handle(host):
+        scraper_module = baonai
     else:
         raise HTTPException(
             status_code=400,
@@ -414,7 +416,10 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "3movs.com" in parsed_url.netloc.lower() or
         "porndig.com" in parsed_url.netloc.lower() or
         "txxx.com" in parsed_url.netloc.lower() or
-        "txxx.tube" in parsed_url.netloc.lower()):
+        "txxx.tube" in parsed_url.netloc.lower() or
+        "d2eabzntayzi4t.cloudfront.net" in parsed_url.netloc.lower() or
+        "baonai.tv" in parsed_url.netloc.lower() or
+        "blksptt.bgezuw.cn" in parsed_url.netloc.lower()):
         qualities: dict[str, Any] = {}
         all_streams = video_data.get("streams", [])
         host_l = parsed_url.netloc.lower()
@@ -486,6 +491,9 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "porndig.com" in host_l
             or "txxx.com" in host_l
             or "txxx.tube" in host_l
+            or "d2eabzntayzi4t.cloudfront.net" in host_l
+            or "baonai.tv" in host_l
+            or "blksptt.bgezuw.cn" in host_l
         )
         
         # Debug logging for RedTube
