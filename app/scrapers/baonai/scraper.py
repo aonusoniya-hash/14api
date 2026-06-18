@@ -13,6 +13,8 @@ import uuid
 from typing import Any, Optional, cast
 from urllib.parse import parse_qs, quote, urlparse
 
+from app.scrapers.baonai.media_crypto import BAONAI_REFERER
+
 BASE_SITE = "https://d2eabzntayzi4t.cloudfront.net/"
 SITE_HOST = "d2eabzntayzi4t.cloudfront.net"
 SITE_ALIASES = frozenset(
@@ -29,6 +31,13 @@ APP_VERSION = "2.1.6"
 
 _DEFAULT_IMAGE_CDN = "https://lksqimg.bgezuw.cn/"
 _DEFAULT_VIDEO_CDN = "https://blksptt.bgezuw.cn/"
+
+_FALLBACK_API_HOSTS = [
+    "https://d369kzqa984zjo.cloudfront.net",
+    "https://dhysy9alxu0gy.cloudfront.net",
+    "https://sadwaafaa.wm38ijth.com",
+    BASE_SITE.rstrip("/"),
+]
 
 _DEFAULT_HEADERS = {
     "User-Agent": (
@@ -48,10 +57,12 @@ _VIDEO_ID_RE = re.compile(
 _VIDEO_ID_QUERY_RE = re.compile(r"[?&](?:id|videoId|video_id)=(\d+)", re.IGNORECASE)
 _VIDEO_ID_PATH_RE = re.compile(r"/(\d{4,})(?:/|$|\?|#)")
 
-_session_dev_id = secrets.token_hex(16)
+_session_dev_id = str(uuid.uuid4())
 _session_sid = str(uuid.uuid4())
 _token_cache: dict[str, Any] = {"token": "", "expires_at": 0.0}
 _cdn_cache: dict[str, str] = {}
+_api_hosts_cache: list[str] = []
+_active_api_base: str = BASE_SITE.rstrip("/")
 
 
 def can_handle(host: str) -> bool:
@@ -225,58 +236,72 @@ async def _fetch_with_curl_cffi(
     token: str = "",
     json_body: Optional[dict[str, Any]] = None,
     x_user_agent: Optional[str] = None,
+    api_base: Optional[str] = None,
 ) -> Any:
     try:
         from curl_cffi.requests import AsyncSession
     except ImportError:
         return None
 
-    url = f"{BASE_SITE.rstrip('/')}{api_path}"
-    headers = _auth_headers(token, api_path, x_user_agent=x_user_agent)
+    bases = [api_base.rstrip("/")] if api_base else _api_host_candidates()
+    headers_base = _auth_headers(token, api_path, x_user_agent=x_user_agent)
     if method.upper() == "GET":
-        headers.pop("Content-Type", None)
+        headers_base.pop("Content-Type", None)
 
-    for imp in ("chrome120", "chrome110", "safari15_3"):
-        try:
-            async with AsyncSession(impersonate=imp, timeout=45.0) as client:
-                if method.upper() == "GET":
-                    resp = await client.get(url, headers=headers)
-                else:
-                    resp = await client.post(url, json=json_body or {}, headers=headers)  # type: ignore[attr-defined]
-                if resp.status_code != 200:
-                    continue
-                return _parse_api_response(resp.text)
-        except Exception:
-            continue
+    for base in bases:
+        url = f"{base}{api_path}"
+        headers = dict(headers_base)
+        for imp in ("chrome120", "chrome110", "safari15_3"):
+            try:
+                async with AsyncSession(impersonate=imp, timeout=45.0) as client:
+                    if method.upper() == "GET":
+                        resp = await client.get(url, headers=headers)
+                    else:
+                        resp = await client.post(url, json=json_body or {}, headers=headers)  # type: ignore[attr-defined]
+                    if resp.status_code != 200:
+                        continue
+                    parsed = _parse_api_response(resp.text)
+                    if parsed is not None:
+                        global _active_api_base
+                        _active_api_base = base
+                    return parsed
+            except Exception:
+                continue
     return None
 
 
 async def _guest_login(force: bool = False) -> str:
-    global _session_dev_id
+    global _session_dev_id, _active_api_base
     now = time.time()
     cached = str(_token_cache.get("token") or "")
     if cached and not force and float(_token_cache.get("expires_at") or 0) > now + 60:
         return cached
 
+    await _ensure_cdn_config()
+
     for attempt in range(5):
         if attempt:
-            _session_dev_id = secrets.token_hex(16)
+            _session_dev_id = str(uuid.uuid4())
             await asyncio.sleep(0.4 * attempt)
-        payload = await _fetch_with_curl_cffi(
-            "POST",
-            "/api/app/login/guest",
-            json_body={"devID": _session_dev_id, "affCode": "{}", "token": ""},
-        )
-        if not isinstance(payload, dict) or payload.get("code") != 200:
-            continue
-        data = payload.get("data")
-        token = ""
-        if isinstance(data, dict):
-            token = str(data.get("token") or "")
-        if token:
-            _token_cache["token"] = token
-            _token_cache["expires_at"] = now + 3600
-            return token
+        for api_base in _api_host_candidates():
+            payload = await _fetch_with_curl_cffi(
+                "POST",
+                "/api/app/login/guest",
+                token="",
+                json_body={"devID": _session_dev_id, "affCode": "{}", "token": ""},
+                api_base=api_base,
+            )
+            if not isinstance(payload, dict) or payload.get("code") != 200:
+                continue
+            data = payload.get("data")
+            token = ""
+            if isinstance(data, dict):
+                token = str(data.get("token") or "")
+            if token:
+                _active_api_base = api_base.rstrip("/")
+                _token_cache["token"] = token
+                _token_cache["expires_at"] = now + 3600
+                return token
 
     return cached
 
@@ -320,6 +345,12 @@ def _apply_domain_config(domain_entries: Any) -> None:
         urls = entry.get("urls")
         if not isinstance(urls, list) or not urls:
             continue
+        if kind == "API":
+            for raw in urls:
+                host = str(raw).strip().rstrip("/")
+                if host and host not in _api_hosts_cache:
+                    _api_hosts_cache.append(host)
+            continue
         base = str(urls[0]).strip()
         if not base:
             continue
@@ -331,13 +362,39 @@ def _apply_domain_config(domain_entries: Any) -> None:
             _cdn_cache["video"] = base
 
 
+def _api_host_candidates() -> list[str]:
+    hosts = list(_api_hosts_cache)
+    for host in _FALLBACK_API_HOSTS:
+        normalized = host.rstrip("/")
+        if normalized not in hosts:
+            hosts.append(normalized)
+    active = _active_api_base.rstrip("/")
+    if active and active not in hosts:
+        hosts.append(active)
+    # Primary site host often returns null guest tokens; try alternates first.
+    primary = BASE_SITE.rstrip("/")
+    return [h for h in hosts if h != primary] + ([primary] if primary in hosts else [])
+
+
 async def _ensure_cdn_config() -> None:
-    if _cdn_cache.get("image") and _cdn_cache.get("video"):
+    if _cdn_cache.get("image") and _cdn_cache.get("video") and _api_hosts_cache:
         return
-    config = await _api_get("/api/app/ping/config")
-    data = config.get("data")
-    if isinstance(data, dict):
-        _apply_domain_config(data.get("domain"))
+    for api_base in _api_host_candidates():
+        config = await _fetch_with_curl_cffi(
+            "GET",
+            "/api/app/ping/config",
+            token="",
+            api_base=api_base,
+        )
+        if isinstance(config, dict) and config.get("code") == 200:
+            data = config.get("data")
+            if isinstance(data, dict):
+                _apply_domain_config(data.get("domain"))
+            if api_base.rstrip("/") not in _api_hosts_cache:
+                _api_hosts_cache.append(api_base.rstrip("/"))
+            global _active_api_base
+            _active_api_base = api_base.rstrip("/")
+            break
 
 
 def _image_url(path: Optional[str]) -> Optional[str]:
@@ -368,10 +425,79 @@ def _video_cdn_url(path: Optional[str]) -> Optional[str]:
     return f"{base}{value.lstrip('/')}"
 
 
-def _h5_play_url(video_id: str | int, token: str) -> str:
+def _h5_play_url(video_id: str | int, token: str, *, api_base: Optional[str] = None) -> str:
     api_path = f"/api/app/media/h5/m3u8/{video_id}"
     query = _x_api_key(token, api_path, x_user_agent="").replace(";", "&")
-    return f"{BASE_SITE.rstrip('/')}{api_path}?token={token}&{query}"
+    base = (api_base or _active_api_base or BASE_SITE.rstrip("/")).rstrip("/")
+    return f"{base}{api_path}?token={token}&{query}"
+
+
+def _wrap_hls_proxy_url(stream_url: str, api_base: str) -> str:
+    if not stream_url or not api_base:
+        return stream_url
+    if "/api/v1/hls/proxy" in stream_url:
+        return stream_url
+    return (
+        f"{api_base.rstrip('/')}/api/v1/hls/proxy"
+        f"?url={quote(stream_url, safe='')}"
+        f"&referer={quote(BAONAI_REFERER, safe='')}"
+    )
+
+
+async def _resolve_h5_m3u8_url(video_id: str | int, token: str) -> Optional[str]:
+    """Resolve the site's h5 m3u8 API to a direct CDN playlist URL when possible."""
+    play_url = _h5_play_url(video_id, token)
+    try:
+        from curl_cffi.requests import AsyncSession
+    except ImportError:
+        return None
+
+    headers = {
+        "User-Agent": _DEFAULT_HEADERS["User-Agent"],
+        "Referer": BASE_SITE,
+        "Origin": BASE_SITE.rstrip("/"),
+        "Authorization": token,
+    }
+    for imp in ("chrome120", "chrome110", "safari15_3"):
+        try:
+            async with AsyncSession(impersonate=imp, timeout=45.0) as client:
+                resp = await client.get(play_url, headers=headers)
+                if resp.status_code != 200:
+                    continue
+                text = (resp.text or "").strip()
+                if not text:
+                    continue
+                plain = text
+                try:
+                    outer = json.loads(text)
+                except json.JSONDecodeError:
+                    if text.startswith("#EXTM3U"):
+                        return None
+                    continue
+                if isinstance(outer, dict) and outer.get("hash") and isinstance(outer.get("data"), str):
+                    plain = decrypt_response(outer["data"])
+                elif isinstance(outer, dict):
+                    plain = json.dumps(outer)
+                if plain.startswith("#EXTM3U"):
+                    return None
+                try:
+                    payload = json.loads(plain)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(payload, dict):
+                    for key in ("url", "videoUrl", "m3u8", "playUrl"):
+                        value = payload.get(key)
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()
+                    data = payload.get("data")
+                    if isinstance(data, dict):
+                        for key in ("url", "videoUrl", "m3u8"):
+                            value = data.get(key)
+                            if isinstance(value, str) and value.strip():
+                                return value.strip()
+        except Exception:
+            continue
+    return None
 
 
 def _canonical_video_url(video_id: str | int, *, host: str = SITE_HOST) -> str:
@@ -465,31 +591,59 @@ def _list_item_from_media(row: dict[str, Any], *, host: str) -> dict[str, Any]:
     }
 
 
-def _streams_from_media(info: dict[str, Any], *, token: str) -> tuple[list[dict[str, Any]], Optional[str], Optional[str]]:
+async def _streams_from_media(
+    info: dict[str, Any],
+    *,
+    token: str,
+    api_base: Optional[str] = None,
+) -> tuple[list[dict[str, Any]], Optional[str], Optional[str]]:
     video_id = str(info.get("id") or "").strip()
     streams: list[dict[str, Any]] = []
     hls_url: Optional[str] = None
     default_url: Optional[str] = None
 
-    if video_id:
-        hls_url = _h5_play_url(video_id, token)
-        streams.append({"format": "hls", "url": hls_url, "quality": "auto"})
+    candidates: list[tuple[str, str]] = []
+    if video_id and token:
+        candidates.append(("h5", _h5_play_url(video_id, token)))
 
     direct = _video_cdn_url(_first_non_empty(info.get("videoUrl"), info.get("preFileName")))
     if direct:
-        streams.append({"format": "hls", "url": direct, "quality": "source"})
-        default_url = direct
+        candidates.append(("source", direct))
 
-    if hls_url and not default_url:
-        default_url = hls_url
+    if video_id:
+        resolved = await _resolve_h5_m3u8_url(video_id, token)
+        if resolved:
+            resolved_full = resolved
+            if resolved_full.startswith("/"):
+                resolved_full = _video_cdn_url(resolved_full) or resolved_full
+            elif not resolved_full.startswith("http"):
+                resolved_full = _video_cdn_url(resolved_full) or resolved_full
+            candidates.insert(0, ("auto", resolved_full))
+
+    seen: set[str] = set()
+    for quality, raw_url in candidates:
+        if not raw_url or raw_url in seen:
+            continue
+        seen.add(raw_url)
+        stream_url = _wrap_hls_proxy_url(raw_url, api_base or "") if api_base else raw_url
+        streams.append({"format": "hls", "url": stream_url, "quality": quality})
+        if not default_url:
+            default_url = stream_url
+            hls_url = stream_url
 
     return streams, hls_url, default_url
 
 
-def _video_result_from_media(info: dict[str, Any], *, url: str, token: str) -> dict[str, Any]:
+async def _video_result_from_media(
+    info: dict[str, Any],
+    *,
+    url: str,
+    token: str,
+    api_base: Optional[str] = None,
+) -> dict[str, Any]:
     raw_publisher = info.get("publisher")
     publisher: dict[str, Any] = raw_publisher if isinstance(raw_publisher, dict) else {}
-    streams, hls_url, default_url = _streams_from_media(info, token=token)
+    streams, hls_url, default_url = await _streams_from_media(info, token=token, api_base=api_base)
     tags: list[str] = []
     topics = info.get("topics")
     if isinstance(topics, list):
@@ -514,7 +668,7 @@ def _video_result_from_media(info: dict[str, Any], *, url: str, token: str) -> d
     }
 
 
-async def scrape(url: str) -> dict[str, Any]:
+async def scrape(url: str, *, api_base: Optional[str] = None) -> dict[str, Any]:
     await _ensure_cdn_config()
     parsed = urlparse(url if url.startswith("http") else f"{BASE_SITE.rstrip('/')}/{url.lstrip('/')}")
     host = _normalize_site_host(parsed.netloc or SITE_HOST)
@@ -537,6 +691,8 @@ async def scrape(url: str) -> dict[str, Any]:
     raw_info = data.get("mediaInfo")
     info = raw_info if isinstance(raw_info, dict) else None
     if info is None:
+        info = await _find_media_in_lists(video_id)
+    if info is None:
         return {
             "url": _canonical_video_url(video_id, host=host),
             "title": "",
@@ -548,7 +704,7 @@ async def scrape(url: str) -> dict[str, Any]:
         }
 
     canonical = _canonical_video_url(video_id, host=host)
-    return _video_result_from_media(info, url=canonical, token=token)
+    return await _video_result_from_media(info, url=canonical, token=token, api_base=api_base)
 
 
 async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[dict[str, Any]]:
@@ -580,3 +736,44 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
             rows = [row for row in media_list if isinstance(row, dict)]
 
     return [_list_item_from_media(row, host=host) for row in rows[:page_size]]
+
+
+async def _find_media_in_lists(video_id: str) -> Optional[dict[str, Any]]:
+    """Fallback when /media/play requires auth: list endpoints expose videoUrl without a token."""
+    target = str(video_id).strip()
+    if not target:
+        return None
+    category_ids: list[int] = []
+    for entry in get_categories():
+        if isinstance(entry, dict) and entry.get("id") is not None:
+            try:
+                category_ids.append(int(entry["id"]))
+            except (TypeError, ValueError):
+                continue
+    if not category_ids:
+        category_ids = [2]
+
+    seen: set[int] = set()
+    for category_id in category_ids:
+        if category_id in seen:
+            continue
+        seen.add(category_id)
+        for page_num in range(1, 4):
+            response = await _fetch_with_curl_cffi(
+                "POST",
+                "/api/app/media/home",
+                token="",
+                json_body={"id": category_id, "pageNum": page_num, "pageSize": 100},
+            )
+            if not isinstance(response, dict) or response.get("code") != 200:
+                break
+            data = response.get("data")
+            if not isinstance(data, dict):
+                break
+            media_list = data.get("mediaList")
+            if not isinstance(media_list, list) or not media_list:
+                break
+            for row in media_list:
+                if isinstance(row, dict) and str(row.get("id") or "").strip() == target:
+                    return row
+    return None

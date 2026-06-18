@@ -7,6 +7,14 @@ import httpx
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_BAONAI_CDN_MARKERS = ("bgezuw.cn", "lksqimg.", "blksptt.")
+
+
+def _is_baonai_cdn(url: str) -> bool:
+    url_lower = (url or "").lower()
+    return any(marker in url_lower for marker in _BAONAI_CDN_MARKERS)
+
+
 @router.get("/proxy", summary="Thumbnail Proxy")
 async def thumbnail_proxy(
     url: str = Query(..., description="Target Thumbnail URL"),
@@ -27,8 +35,9 @@ async def thumbnail_proxy(
     is_redtube = any(x in url_lower for x in ["rdtcdn.com", "redtube.com"])
     is_tube8 = any(x in url_lower for x in ["t8cdn.com", "tube8.com"])
     is_hanime = any(x in url_lower for x in ["hanime.tv", "hb00.io", "hanime-cdn.com", "hb01.io", "hb02.io"])
+    is_baonai = _is_baonai_cdn(url_lower)
 
-    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8 or is_hanime):
+    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8 or is_hanime or is_baonai):
         raise HTTPException(status_code=403, detail="Only allowed domains are supported")
         
     if (is_youporn or is_pornhub or is_redtube or is_tube8) and "/plain/" not in url_lower:
@@ -57,6 +66,10 @@ async def thumbnail_proxy(
             headers["Referer"] = "https://www.tube8.com/"
         elif is_hanime:
             headers["Referer"] = "https://hanime.tv/"
+        elif is_baonai:
+            from app.scrapers.baonai.media_crypto import BAONAI_REFERER
+
+            headers["Referer"] = BAONAI_REFERER
 
     try:
         # Per-request client: avoids binding a pooled session to the wrong event loop
@@ -76,6 +89,11 @@ async def thumbnail_proxy(
                 )
             content = resp.content
             content_type = resp.headers.get("content-type", "image/jpeg")
+            if is_baonai:
+                from app.scrapers.baonai.media_crypto import decrypt_image, detect_image_media_type
+
+                content = decrypt_image(content)
+                content_type = detect_image_media_type(content)
 
             return Response(
                 content=content,
@@ -111,8 +129,9 @@ def wrap_thumbnail_url(url: str, api_base_url: str) -> str:
     is_redtube = any(x in url_lower for x in ["rdtcdn.com", "redtube.com"])
     is_tube8 = any(x in url_lower for x in ["t8cdn.com", "tube8.com"])
     is_hanime = any(x in url_lower for x in ["hanime.tv", "hb00.io", "hanime-cdn.com", "hb01.io", "hb02.io"])
+    is_baonai = _is_baonai_cdn(url_lower)
 
-    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8 or is_hanime):
+    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8 or is_hanime or is_baonai):
         return url
         
     if is_youporn or is_pornhub or is_redtube or is_tube8:

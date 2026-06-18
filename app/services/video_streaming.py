@@ -210,7 +210,10 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
     
     try:
         # Scrape the page (now includes video URLs)
-        metadata = await scraper_module.scrape(url)
+        if scraper_module == baonai:
+            metadata = await scraper_module.scrape(url, api_base=api_base_url)
+        else:
+            metadata = await scraper_module.scrape(url)
     except Exception as e:
         logger.error(f"Failed to scrape video info: {e}")
         raise HTTPException(

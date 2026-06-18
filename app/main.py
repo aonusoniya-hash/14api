@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -128,7 +128,7 @@ class CrawlRequestV1(BaseModel):
 
 # Import loose dispatch functions (re-using existing ones for now)
 # Ideally these should be in services/scraper_service.py
-async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
+async def _scrape_dispatch(url: str, host: str, api_base: Optional[str] = None) -> dict[str, Any]:
     if xhamster.can_handle(host): return await xhamster.scrape(url)
     if masa49.can_handle(host): return await masa49.scrape(url)
     if xnxx.can_handle(host): return await xnxx.scrape(url)
@@ -199,7 +199,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if threemovs.can_handle(host): return await threemovs.scrape(url)
     if porndig.can_handle(host): return await porndig.scrape(url)
     if txxx.can_handle(host): return await txxx.scrape(url)
-    if baonai.can_handle(host): return await baonai.scrape(url)
+    if baonai.can_handle(host): return await baonai.scrape(url, api_base=api_base)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, Any]]:
@@ -305,7 +305,7 @@ async def create_scrape(request: Request, body: ScrapeRequestV1) -> ScrapeRespon
         logging.info(f"⚡ Cache HIT for scrape {body.url}")
         return ScrapeResponse(**cached_result)
     try:
-        data = await _scrape_dispatch(str(body.url), body.url.host or "")
+        data = await _scrape_dispatch(str(body.url), body.url.host or "", api_base=api_base)
         thumb = data.get("thumbnail_url")
         if isinstance(thumb, str) and thumb:
             data["thumbnail_url"] = thumbnails.wrap_thumbnail_url(thumb, api_base)
