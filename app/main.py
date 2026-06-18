@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx
 from contextlib import asynccontextmanager
+from typing import Any
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,10 +33,20 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
+
+
+def _category_item(raw: dict[str, Any]) -> CategoryItem:
+    return CategoryItem.model_validate(raw)
+
+
+def _wrap_item_thumbnail(item: dict[str, Any], api_base: str) -> None:
+    thumb = item.get("thumbnail_url")
+    if isinstance(thumb, str) and thumb:
+        item["thumbnail_url"] = thumbnails.wrap_thumbnail_url(thumb, api_base)
 
 
 @asynccontextmanager
@@ -117,7 +128,7 @@ class CrawlRequestV1(BaseModel):
 
 # Import loose dispatch functions (re-using existing ones for now)
 # Ideally these should be in services/scraper_service.py
-async def _scrape_dispatch(url: str, host: str) -> dict[str, object]:
+async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if xhamster.can_handle(host): return await xhamster.scrape(url)
     if masa49.can_handle(host): return await masa49.scrape(url)
     if xnxx.can_handle(host): return await xnxx.scrape(url)
@@ -187,9 +198,10 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, object]:
     if pornone.can_handle(host): return await pornone.scrape(url)
     if threemovs.can_handle(host): return await threemovs.scrape(url)
     if porndig.can_handle(host): return await porndig.scrape(url)
+    if txxx.can_handle(host): return await txxx.scrape(url)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
-async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, object]]:
+async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, Any]]:
     if xhamster.can_handle(host): return await xhamster.list_videos(base_url=base_url, page=page, limit=limit)
     if masa49.can_handle(host): return await masa49.list_videos(base_url=base_url, page=page, limit=limit)
     if xnxx.can_handle(host): return await xnxx.list_videos(base_url=base_url, page=page, limit=limit)
@@ -259,11 +271,14 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if pornone.can_handle(host): return await pornone.list_videos(base_url=base_url, page=page, limit=limit)
     if threemovs.can_handle(host): return await threemovs.list_videos(base_url=base_url, page=page, limit=limit)
     if porndig.can_handle(host): return await porndig.list_videos(base_url=base_url, page=page, limit=limit)
+    if txxx.can_handle(host): return await txxx.list_videos(base_url=base_url, page=page, limit=limit)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
-async def _crawl_dispatch(base_url: str, host: str, start_page: int, max_pages: int, per_page_limit: int, max_items: int) -> list[dict[str, object]]:
+async def _crawl_dispatch(base_url: str, host: str, start_page: int, max_pages: int, per_page_limit: int, max_items: int) -> list[dict[str, Any]]:
     if xhamster.can_handle(host):
-        return await xhamster.crawl_videos(base_url=base_url, start_page=start_page, max_pages=max_pages, per_page_limit=per_page_limit, max_items=max_items)
+        from app.scrapers.xhamster.scraper import crawl_videos
+
+        return await crawl_videos(base_url=base_url, start_page=start_page, max_pages=max_pages, per_page_limit=per_page_limit, max_items=max_items)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 
@@ -289,8 +304,9 @@ async def create_scrape(request: Request, body: ScrapeRequestV1) -> ScrapeRespon
         return ScrapeResponse(**cached_result)
     try:
         data = await _scrape_dispatch(str(body.url), body.url.host or "")
-        if "thumbnail_url" in data:
-            data["thumbnail_url"] = thumbnails.wrap_thumbnail_url(data["thumbnail_url"], api_base)
+        thumb = data.get("thumbnail_url")
+        if isinstance(thumb, str) and thumb:
+            data["thumbnail_url"] = thumbnails.wrap_thumbnail_url(thumb, api_base)
         await cache.set(cache_key, data, ttl_seconds=7200)  # Cache scrapes for 2 hours
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail="Upstream returned error") from e
@@ -337,8 +353,7 @@ async def list_videos(request: Request, base_url: str, page: int = 1, limit: int
             from app.config.settings import settings
             api_base = settings.BASE_URL or str(request.base_url)
             for it in items:
-                if "thumbnail_url" in it:
-                    it["thumbnail_url"] = thumbnails.wrap_thumbnail_url(it["thumbnail_url"], api_base)
+                _wrap_item_thumbnail(it, api_base)
             await cache.set(cache_key, items, ttl_seconds=3600)  # Cache for 1 hour (aggressive)
         
         return [ListItem(**it) for it in items]
@@ -378,8 +393,7 @@ async def create_crawl(request: Request, body: CrawlRequestV1) -> list[ListItem]
         from app.config.settings import settings
         api_base = settings.BASE_URL or str(request.base_url)
         for it in items:
-            if "thumbnail_url" in it:
-                it["thumbnail_url"] = thumbnails.wrap_thumbnail_url(it["thumbnail_url"], api_base)
+            _wrap_item_thumbnail(it, api_base)
 
     return [ListItem(**it) for it in items]
 
@@ -399,75 +413,76 @@ async def get_categories(source: str) -> list[CategoryItem]:
     """
     s = source.lower()
     try:
-        if s == "xnxx": return [CategoryItem(**c) for c in xnxx.get_categories()]
-        if s == "masa": return [CategoryItem(**c) for c in masa49.get_categories()]
-        if s == "xvideos": return [CategoryItem(**c) for c in xvideos.get_categories()]
-        if s == "xhamster": return [CategoryItem(**c) for c in xhamster.get_categories()]
-        if s == "youporn": return [CategoryItem(**c) for c in youporn.get_categories()]
-        if s == "pornhub": return [CategoryItem(**c) for c in pornhub.get_categories()]
-        if s == "redtube": return [CategoryItem(**c) for c in redtube.get_categories()]
-        if s == "beeg": return [CategoryItem(**c) for c in beeg.get_categories()]
-        if s == "spankbang": return [CategoryItem(**c) for c in spankbang.get_categories()]
-        if s == "onlyfans" or s == "fapnut": return [CategoryItem(**c) for c in await fapnut.get_categories()]
-        if s == "pornxp": return [CategoryItem(**c) for c in pornxp.get_categories()]
-        if s == "hqporner": return [CategoryItem(**c) for c in hqporner.get_categories()]
-        if s == "xxxparodyhd": return [CategoryItem(**c) for c in xxxparodyhd.get_categories()]
-        if s == "pornwex": return [CategoryItem(**c) for c in pornwex.get_categories()]
-        if s == "tube8": return [CategoryItem(**c) for c in tube8.get_categories()]
-        if s == "pornhat": return [CategoryItem(**c) for c in pornhat.get_categories()]
-        if s == "brazzpw": return [CategoryItem(**c) for c in brazzpw.get_categories()]
-        if s == "gosexpod": return [CategoryItem(**c) for c in gosexpod.get_categories()]
-        if s == "watcherotic": return [CategoryItem(**c) for c in watcherotic.get_categories()]
-        if s == "rule34video": return [CategoryItem(**c) for c in rule34video.get_categories()]
-        if s == "haho": return [CategoryItem(**c) for c in haho.get_categories()]
-        if s == "hanime": return [CategoryItem(**c) for c in hanime.get_categories()]
-        if s == "rouvideo": return [CategoryItem(**c) for c in rouvideo.get_categories()]
-        if s == "cg51" or s == "51cg": return [CategoryItem(**c) for c in cg51.get_categories()]
-        if s == "oppai": return [CategoryItem(**c) for c in oppai.get_categories()]
-        if s == "xmoviesforyou" or s == "xmovies": return [CategoryItem(**c) for c in xmoviesforyou.get_categories()]
-        if s == "tnaflix": return [CategoryItem(**c) for c in tnaflix.get_categories()]
-        if s == "hornysimp": return [CategoryItem(**c) for c in hornysimp.get_categories()]
-        if s == "pimpbunny": return [CategoryItem(**c) for c in pimpbunny.get_categories()]
-        if s == "hentaiser": return [CategoryItem(**c) for c in hentaiser.get_categories()]
-        if s == "bollywoodmaal": return [CategoryItem(**c) for c in bollywoodmaal.get_categories()]
-        if s == "viralkand": return [CategoryItem(**c) for c in viralkand.get_categories()]
-        if s == "blowjobspro" or s == "blowjobs": return [CategoryItem(**c) for c in blowjobspro.get_categories()]
-        if s == "blackporn24" or s == "blackporn": return [CategoryItem(**c) for c in blackporn24.get_categories()]
-        if s == "lesbianporn8" or s == "lesbianporn": return [CategoryItem(**c) for c in lesbianporn8.get_categories()]
-        if s == "milfporn8" or s == "milf8" or s == "milfporn": return [CategoryItem(**c) for c in milfporn8.get_categories()]
-        if s == "indianporn365" or s == "indianporn": return [CategoryItem(**c) for c in indianporn365.get_categories()]
-        if s == "mmsbro": return [CategoryItem(**c) for c in mmsbro.get_categories()]
-        if s == "kamababa": return [CategoryItem(**c) for c in kamababa.get_categories()]
-        if s == "desimms2" or s == "desimms": return [CategoryItem(**c) for c in desimms2.get_categories()]
-        if s == "desiporn" or s == "desipornone": return [CategoryItem(**c) for c in desiporn.get_categories()]
-        if s == "thotsporn" or s == "thots": return [CategoryItem(**c) for c in thotsporn.get_categories()]
-        if s == "leakedamateurporn" or s == "leakedamateur": return [CategoryItem(**c) for c in leakedamateurporn.get_categories()]
-        if s == "zeenite": return [CategoryItem(**c) for c in zeenite.get_categories()]
-        if s == "uncutmaza" or s == "uncut": return [CategoryItem(**c) for c in uncutmaza.get_categories()]
-        if s == "mydesimms" or s == "mydesi": return [CategoryItem(**c) for c in mydesimms.get_categories()]
-        if s == "po85" or s == "85po": return [CategoryItem(**c) for c in po85.get_categories()]
-        if s == "cosxplay" or s == "cosx": return [CategoryItem(**c) for c in cosxplay.get_categories()]
-        if s == "memojav" or s == "memo": return [CategoryItem(**c) for c in memojav.get_categories()]
-        if s == "hohoj" or s == "hohojtv": return [CategoryItem(**c) for c in hohoj.get_categories()]
-        if s == "ggjav" or s == "ggjavtv": return [CategoryItem(**c) for c in ggjav.get_categories()]
-        if s == "porn87" or s == "porn87tv": return [CategoryItem(**c) for c in porn87.get_categories()]
-        if s == "goodav" or s == "goodav17": return [CategoryItem(**c) for c in goodav.get_categories()]
-        if s == "kanav": return [CategoryItem(**c) for c in kanav.get_categories()]
-        if s == "missav" or s == "missavai": return [CategoryItem(**c) for c in missav.get_categories()]
-        if s == "jable" or s == "jabletv": return [CategoryItem(**c) for c in jable.get_categories()]
-        if s in ("tianmei", "94mt", "94mtcc", "tianmeione"): return [CategoryItem(**c) for c in tianmei.get_categories()]
-        if s == "bindasmood" or s == "bindas": return [CategoryItem(**c) for c in bindasmood.get_categories()]
-        if s == "eporner": return [CategoryItem(**c) for c in eporner.get_categories()]
-        if s == "dotmaal" or s == "dot": return [CategoryItem(**c) for c in dotmaal.get_categories()]
-        if s == "uncutmasti" or s == "masti": return [CategoryItem(**c) for c in uncutmasti.get_categories()]
-        if s == "zmaal": return [CategoryItem(**c) for c in zmaal.get_categories()]
-        if s == "ulluwebseries" or s == "ulluws": return [CategoryItem(**c) for c in ulluwebseries.get_categories()]
-        if s == "desithothub" or s == "thothub": return [CategoryItem(**c) for c in desithothub.get_categories()]
-        if s == "motherless": return [CategoryItem(**c) for c in motherless.get_categories()]
-        if s == "youjizz": return [CategoryItem(**c) for c in youjizz.get_categories()]
-        if s == "pornone": return [CategoryItem(**c) for c in pornone.get_categories()]
-        if s in ("3movs", "threemovs", "movs3"): return [CategoryItem(**c) for c in threemovs.get_categories()]
-        if s == "porndig": return [CategoryItem(**c) for c in porndig.get_categories()]
+        if s == "xnxx": return [_category_item(c) for c in xnxx.get_categories()]
+        if s == "masa": return [_category_item(c) for c in masa49.get_categories()]
+        if s == "xvideos": return [_category_item(c) for c in xvideos.get_categories()]
+        if s == "xhamster": return [_category_item(c) for c in xhamster.get_categories()]
+        if s == "youporn": return [_category_item(c) for c in youporn.get_categories()]
+        if s == "pornhub": return [_category_item(c) for c in pornhub.get_categories()]
+        if s == "redtube": return [_category_item(c) for c in redtube.get_categories()]
+        if s == "beeg": return [_category_item(c) for c in beeg.get_categories()]
+        if s == "spankbang": return [_category_item(c) for c in spankbang.get_categories()]
+        if s == "onlyfans" or s == "fapnut": return [_category_item(c) for c in await fapnut.get_categories()]
+        if s == "pornxp": return [_category_item(c) for c in pornxp.get_categories()]
+        if s == "hqporner": return [_category_item(c) for c in hqporner.get_categories()]
+        if s == "xxxparodyhd": return [_category_item(c) for c in xxxparodyhd.get_categories()]
+        if s == "pornwex": return [_category_item(c) for c in pornwex.get_categories()]
+        if s == "tube8": return [_category_item(c) for c in tube8.get_categories()]
+        if s == "pornhat": return [_category_item(c) for c in pornhat.get_categories()]
+        if s == "brazzpw": return [_category_item(c) for c in brazzpw.get_categories()]
+        if s == "gosexpod": return [_category_item(c) for c in gosexpod.get_categories()]
+        if s == "watcherotic": return [_category_item(c) for c in watcherotic.get_categories()]
+        if s == "rule34video": return [_category_item(c) for c in rule34video.get_categories()]
+        if s == "haho": return [_category_item(c) for c in haho.get_categories()]
+        if s == "hanime": return [_category_item(c) for c in hanime.get_categories()]
+        if s == "rouvideo": return [_category_item(c) for c in rouvideo.get_categories()]
+        if s == "cg51" or s == "51cg": return [_category_item(c) for c in cg51.get_categories()]
+        if s == "oppai": return [_category_item(c) for c in oppai.get_categories()]
+        if s == "xmoviesforyou" or s == "xmovies": return [_category_item(c) for c in xmoviesforyou.get_categories()]
+        if s == "tnaflix": return [_category_item(c) for c in tnaflix.get_categories()]
+        if s == "hornysimp": return [_category_item(c) for c in hornysimp.get_categories()]
+        if s == "pimpbunny": return [_category_item(c) for c in pimpbunny.get_categories()]
+        if s == "hentaiser": return [_category_item(c) for c in hentaiser.get_categories()]
+        if s == "bollywoodmaal": return [_category_item(c) for c in bollywoodmaal.get_categories()]
+        if s == "viralkand": return [_category_item(c) for c in viralkand.get_categories()]
+        if s == "blowjobspro" or s == "blowjobs": return [_category_item(c) for c in blowjobspro.get_categories()]
+        if s == "blackporn24" or s == "blackporn": return [_category_item(c) for c in blackporn24.get_categories()]
+        if s == "lesbianporn8" or s == "lesbianporn": return [_category_item(c) for c in lesbianporn8.get_categories()]
+        if s == "milfporn8" or s == "milf8" or s == "milfporn": return [_category_item(c) for c in milfporn8.get_categories()]
+        if s == "indianporn365" or s == "indianporn": return [_category_item(c) for c in indianporn365.get_categories()]
+        if s == "mmsbro": return [_category_item(c) for c in mmsbro.get_categories()]
+        if s == "kamababa": return [_category_item(c) for c in kamababa.get_categories()]
+        if s == "desimms2" or s == "desimms": return [_category_item(c) for c in desimms2.get_categories()]
+        if s == "desiporn" or s == "desipornone": return [_category_item(c) for c in desiporn.get_categories()]
+        if s == "thotsporn" or s == "thots": return [_category_item(c) for c in thotsporn.get_categories()]
+        if s == "leakedamateurporn" or s == "leakedamateur": return [_category_item(c) for c in leakedamateurporn.get_categories()]
+        if s == "zeenite": return [_category_item(c) for c in zeenite.get_categories()]
+        if s == "uncutmaza" or s == "uncut": return [_category_item(c) for c in uncutmaza.get_categories()]
+        if s == "mydesimms" or s == "mydesi": return [_category_item(c) for c in mydesimms.get_categories()]
+        if s == "po85" or s == "85po": return [_category_item(c) for c in po85.get_categories()]
+        if s == "cosxplay" or s == "cosx": return [_category_item(c) for c in cosxplay.get_categories()]
+        if s == "memojav" or s == "memo": return [_category_item(c) for c in memojav.get_categories()]
+        if s == "hohoj" or s == "hohojtv": return [_category_item(c) for c in hohoj.get_categories()]
+        if s == "ggjav" or s == "ggjavtv": return [_category_item(c) for c in ggjav.get_categories()]
+        if s == "porn87" or s == "porn87tv": return [_category_item(c) for c in porn87.get_categories()]
+        if s == "goodav" or s == "goodav17": return [_category_item(c) for c in goodav.get_categories()]
+        if s == "kanav": return [_category_item(c) for c in kanav.get_categories()]
+        if s == "missav" or s == "missavai": return [_category_item(c) for c in missav.get_categories()]
+        if s == "jable" or s == "jabletv": return [_category_item(c) for c in jable.get_categories()]
+        if s in ("tianmei", "94mt", "94mtcc", "tianmeione"): return [_category_item(c) for c in tianmei.get_categories()]
+        if s == "bindasmood" or s == "bindas": return [_category_item(c) for c in bindasmood.get_categories()]
+        if s == "eporner": return [_category_item(c) for c in eporner.get_categories()]
+        if s == "dotmaal" or s == "dot": return [_category_item(c) for c in dotmaal.get_categories()]
+        if s == "uncutmasti" or s == "masti": return [_category_item(c) for c in uncutmasti.get_categories()]
+        if s == "zmaal": return [_category_item(c) for c in zmaal.get_categories()]
+        if s == "ulluwebseries" or s == "ulluws": return [_category_item(c) for c in ulluwebseries.get_categories()]
+        if s == "desithothub" or s == "thothub": return [_category_item(c) for c in desithothub.get_categories()]
+        if s == "motherless": return [_category_item(c) for c in motherless.get_categories()]
+        if s == "youjizz": return [_category_item(c) for c in youjizz.get_categories()]
+        if s == "pornone": return [_category_item(c) for c in pornone.get_categories()]
+        if s in ("3movs", "threemovs", "movs3"): return [_category_item(c) for c in threemovs.get_categories()]
+        if s == "porndig": return [_category_item(c) for c in porndig.get_categories()]
+        if s == "txxx": return [_category_item(c) for c in txxx.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load categories: {str(e)}")
@@ -609,7 +624,8 @@ api_v1_router.include_router(downloader.router, prefix="/downloader", tags=["Dow
 
 # --- AppHub Version ---
 import importlib
-from app import apphub_version
+
+apphub_version = importlib.import_module("app.apphub_version")
 
 @app.get("/api/apphub/version", tags=["System"])
 async def get_apphub_version():

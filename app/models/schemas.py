@@ -122,6 +122,11 @@ class ScrapeRequest(BaseModel):
             "videos.porndig.com",
             "video-cdn.porndig.com",
             "image-cdn.porndig.com",
+            "txxx.com",
+            "www.txxx.com",
+            "txxx.tube",
+            "www.txxx.tube",
+            "tn.txxx.tube",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -237,6 +242,11 @@ class ListRequest(BaseModel):
             "videos.porndig.com",
             "video-cdn.porndig.com",
             "image-cdn.porndig.com",
+            "txxx.com",
+            "www.txxx.com",
+            "txxx.tube",
+            "www.txxx.tube",
+            "tn.txxx.tube",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
