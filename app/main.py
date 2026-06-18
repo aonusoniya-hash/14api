@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, baonai
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -128,7 +128,7 @@ class CrawlRequestV1(BaseModel):
 
 # Import loose dispatch functions (re-using existing ones for now)
 # Ideally these should be in services/scraper_service.py
-async def _scrape_dispatch(url: str, host: str, api_base: Optional[str] = None) -> dict[str, Any]:
+async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if xhamster.can_handle(host): return await xhamster.scrape(url)
     if masa49.can_handle(host): return await masa49.scrape(url)
     if xnxx.can_handle(host): return await xnxx.scrape(url)
@@ -199,7 +199,6 @@ async def _scrape_dispatch(url: str, host: str, api_base: Optional[str] = None) 
     if threemovs.can_handle(host): return await threemovs.scrape(url)
     if porndig.can_handle(host): return await porndig.scrape(url)
     if txxx.can_handle(host): return await txxx.scrape(url)
-    if baonai.can_handle(host): return await baonai.scrape(url, api_base=api_base)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, Any]]:
@@ -273,7 +272,6 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if threemovs.can_handle(host): return await threemovs.list_videos(base_url=base_url, page=page, limit=limit)
     if porndig.can_handle(host): return await porndig.list_videos(base_url=base_url, page=page, limit=limit)
     if txxx.can_handle(host): return await txxx.list_videos(base_url=base_url, page=page, limit=limit)
-    if baonai.can_handle(host): return await baonai.list_videos(base_url=base_url, page=page, limit=limit)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _crawl_dispatch(base_url: str, host: str, start_page: int, max_pages: int, per_page_limit: int, max_items: int) -> list[dict[str, Any]]:
@@ -305,7 +303,7 @@ async def create_scrape(request: Request, body: ScrapeRequestV1) -> ScrapeRespon
         logging.info(f"⚡ Cache HIT for scrape {body.url}")
         return ScrapeResponse(**cached_result)
     try:
-        data = await _scrape_dispatch(str(body.url), body.url.host or "", api_base=api_base)
+        data = await _scrape_dispatch(str(body.url), body.url.host or "")
         thumb = data.get("thumbnail_url")
         if isinstance(thumb, str) and thumb:
             data["thumbnail_url"] = thumbnails.wrap_thumbnail_url(thumb, api_base)
@@ -485,7 +483,6 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s in ("3movs", "threemovs", "movs3"): return [_category_item(c) for c in threemovs.get_categories()]
         if s == "porndig": return [_category_item(c) for c in porndig.get_categories()]
         if s == "txxx": return [_category_item(c) for c in txxx.get_categories()]
-        if s == "baonai": return [_category_item(c) for c in baonai.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load categories: {str(e)}")

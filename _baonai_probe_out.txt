@@ -1,0 +1,16 @@
+python : C:\Python313\Lib\site-packages\curl_cffi\aio.py:137: RuntimeWarning: 
+At C:\Users\Google11\AppData\Local\Temp\ps-script-b89432a1-c8ff-492a-a8da-46758bdc74dc.ps1:82 char:49
++ ... gle11\Desktop\apphub3\backend"; python _probe_baonai3.py 2>&1 | Out-F ...
++                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Python313\Li...untimeWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Proactor event loop does not implement add_reader family of methods required.
+    Registering an additional selector thread for add_reader support.
+    To avoid this warning use:
+        asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    
+  self.loop = _get_selector(loop if loop is not None else asyncio.get_running_loop())
+POST /app/login/guest 200 application/json; charset=utf-8
+GUEST {"code": 200, "data": "oq98XYz7Sp2U/gQuubrLqFdZPKGhHfNVg9kwxQRD7BSPDivSIXQdcJvwlqOQgSjGlO0jtszejcxQDGsG87t5wZ1ovomnQBWxOTtIpbdthTBEyjlDAcLKO86kwghVuTrfW7XNTvoiDaGjXMQmWAuaKK0W5dgxdXJCBoKSiqDVf0++Oht4Hhq2rSDVaECCx8nyse26yJMcgvPCJq94M6PMoUpQYB+OdgZoGXeyPOayW/j4F6diBcPfFM/siYtIQt8yV7+TfoHVY7PHL4WHvKsuurn0zBd1w/aVJUc/Rl/FQQdTZjwvRZOhIzibAYRYdW5haQxWh9pk2qnbsxwpJgL+quwjacwg6qVgfqDCY6fN+7j04l2co4157mTGWhRtQckztd5jkSyuHkwGcCyBeMqQDkjvZ0YvZRKNKcLeUpxE8pp+VzvpWaGirL/d15/fmPGPCKJ88SkXqd9AqyNWWGUrAamisfXW9n/vkwoyrrzJj0e/IutOyllwh6vaO1dbSrZjGbZK7pNor4Cm1i7g2egrBVtxR66YS9sAsgsLgtpYJ2FItP6I4CjVnN6HHR2BXGcVi5osstGM2IWaOIfVtIgjYjRI0iXvT6da9EWWpJXtW4y8odYqpcfh6+2D+8UjqyRBHrVExlu4KAQbicE/X7S8c0UuIF3rnjgqSvvY7cb8Oq8j5ZYid/vh3xAytWVQsfuN+7JsXIrFJaW/E7b2OZAP8CROm5EZtHwQq9Cuktue5havDNS3HN1CfuP7py0zpbQ+igcucLNNxobXk/+0bItaRSZOzYMP2zCm23udgnVupP1AkUoHaVbpX2IMD0V4IkjKxu9TWaE0P8yECZw+Lqt+po5gBSPVoxBYgxOyMD5N90/G3qP7m3aZymE4DwqGxsd63MCROXt3P5qSZDz5gZ8YnPaehTdPZ2eVtR/QEU/VxdcvNCXSW53sO8urULkEWRb36G3Y3/RuSyoJvV6qN8XLWkvwgsHtVxSu6kXHMZ2/iK+EgEPDbCQv9sFdrlU5DVUrEFShEJ8h6xtv8jzlT770VKEZFrQ/GDaZJH+0qA8dv82EtLl6xtoASCtusil00w1BedpO3Si1VzUSZfvG1VjnsUYA+LVH0rgVIW6/+832JEZ0bd4cMHGza2IuU7ZhBkTWi12wavdBuBFnvt2ADr/JGZv2/c0vQ9QyFWhN14EzuDLoy01RXanjIRqfjgxFXCN3+3FRLdASpbty/T7X+77AAsafi6Jg2ujgSG1b6T0xitqk1PomTO1hb4x0dGxOk+i95YJctSuxBFR3pUjDmoyoyc6eMc209in7VaCipEJBwfEQZIGK0CTNza3ikWfwuWnB+rt7+zFAorUA1EdM73DLftTApn7gYJ8lW1As3EnAZ/b3fiSs9hhGGJRLYdXTKToiRv6BiWkJQ3E+aNow1xEMPJKiiArKrB0oxRLzpZmnNmwTuTQipgu8HfO5RvAHvvvyAZK9C
+NO TOKEN
