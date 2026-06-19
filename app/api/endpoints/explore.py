@@ -744,7 +744,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.justporn.com/",
+        baseUrl="https://www.justporn.com/latest-updates/",
         nickname="JustPorn",
         favicon="https://www.justporn.com/favicon.ico",
         accentColor="#1565C0",
