@@ -1,0 +1,30 @@
+﻿status 200 len 14750
+search-results attrs {'class': ['search-results'], 'id': 'search-results'}
+<div class="search-results" id="search-results">
+ <div class="search-results-content">
+ </div>
+ <div class="search-results-status">
+  <div class="status loading">
+   <h3>
+    Loading
+   </h3>
+   Plase wait...
+  </div>
+  <div class="status error">
+   <h3>
+    Oh no!
+   </h3>
+   There was an error. Please try again later.
+  </div>
+ </div>
+</div>
+
+
+INLINE SCRIPT: function js_server_list_refresh(){var e=0,t=$(".list.js_server_list").parent();$(".list.js_server_list li").each(function(){$(this).find("input").prop("checked")&&e++}),t.find(".current").html(e+" selected")}$(document).ready(function(){js_server_list_refresh(),$("#search-form").submit(function(e){e.preventDefault();var t=$("#search-results"),s=$("#search-results .search-results-content"),r=$(this);page_reset&&$("#input_page").val("1"),$.ajax({url:"/ajax_search.php",method:"POST",beforeSend:function(){r.attr("disabled","true").find("button").attr("disabled","true"),window.history.replaceState&&window.history.replaceState({},"test","/search/?"+r.serialize()),s.fadeOut(100,function(){$(this).html(""),t.find(".status").css("opacity","0"),t.find(".status.loading").css("opacity","1")})},data:$(
+
+simple sort=0 articles 0 links 0
+search/anal articles 0 links 0
+content 
+<div class="search-results-content">
+</div>
+

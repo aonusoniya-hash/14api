@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Optional
-from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+from typing import Any, Optional, cast
+from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
@@ -39,10 +39,6 @@ _VIDEO_HREF_RE = re.compile(
 )
 _PLAYER_URL_RE = re.compile(
     r"pornhoarder\.net/player\.php\?video=(?P<token>[^&\"'\s<>]+)",
-    re.IGNORECASE,
-)
-_PASS_MD5_RE = re.compile(
-    r"""\.get\(\s*['"](/pass_md5/[^'"]+)['"]""",
     re.IGNORECASE,
 )
 _IFRAME_SRC_RE = re.compile(
@@ -165,12 +161,20 @@ def _normalize_video_href(href: str) -> Optional[str]:
     return _canonical_video_url(m.group("slug"), m.group("token"), host=host)
 
 
+def _encode_form_body(data: dict[str, str] | list[tuple[str, str]] | None) -> bytes:
+    if not data:
+        return b""
+    if isinstance(data, dict):
+        return urlencode(data).encode()
+    return urlencode(data, doseq=True).encode()
+
+
 async def _fetch_with_curl_cffi(
     url: str,
     *,
     referer: str | None = None,
     method: str = "GET",
-    data: dict[str, str] | None = None,
+    data: dict[str, str] | list[tuple[str, str]] | None = None,
 ) -> Optional[str]:
     try:
         from curl_cffi.requests import AsyncSession
@@ -184,10 +188,15 @@ async def _fetch_with_curl_cffi(
     for imp in ("chrome120", "chrome110", "safari15_3"):
         try:
             async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
+                session = cast(Any, client)
                 if method.upper() == "POST":
-                    resp = await client.post(url, data=data or {})
+                    post_headers = {
+                        **headers,
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    }
+                    resp = await session.post(url, content=_encode_form_body(data), headers=post_headers)
                 else:
-                    resp = await client.get(url)
+                    resp = await session.get(url)
                 if resp.status_code == 200:
                     return resp.text
         except Exception:
@@ -200,7 +209,7 @@ async def _fetch_text(
     *,
     referer: str | None = None,
     method: str = "GET",
-    data: dict[str, str] | None = None,
+    data: dict[str, str] | list[tuple[str, str]] | None = None,
 ) -> str:
     text = await _fetch_with_curl_cffi(url, referer=referer, method=method, data=data)
     if text:
@@ -214,35 +223,73 @@ async def _fetch_text(
     if method.upper() == "POST":
         import httpx
 
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=45.0) as client:
-            resp = await client.post(url, data=data or {})
+        post_headers = {
+            **headers,
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        async with httpx.AsyncClient(headers=post_headers, follow_redirects=True, timeout=45.0) as client:
+            resp = await client.post(url, content=_encode_form_body(data))
             resp.raise_for_status()
             return resp.text
     return await pool_fetch_html(url, headers=headers)
 
 
-async def _fetch_direct_url(url: str, *, referer: str) -> Optional[str]:
-    try:
-        from curl_cffi.requests import AsyncSession
-    except ImportError:
-        return None
+def _is_search_list_url(base_url: str) -> bool:
+    raw = (base_url or "").strip()
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    parsed = urlparse(raw)
+    path = (parsed.path or "").strip("/").lower()
+    if path == "search" or path.startswith("search/"):
+        return True
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    return any(key in query for key in ("search", "sort", "servers[]", "author", "date"))
 
-    headers = {
-        "User-Agent": _DEFAULT_HEADERS["User-Agent"],
-        "Referer": referer,
-        "Accept": "*/*",
-    }
-    for imp in ("chrome120", "chrome110"):
-        try:
-            async with AsyncSession(impersonate=imp, headers=headers, timeout=30.0) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    body = (resp.text or "").strip()
-                    if body.startswith("http"):
-                        return body.split()[0]
-        except Exception:
-            continue
+
+def _search_term_from_path(path: str) -> Optional[str]:
+    parts = [p for p in (path or "").strip("/").split("/") if p]
+    if len(parts) >= 2 and parts[0].lower() == "search" and parts[1]:
+        return parts[1]
     return None
+
+
+def _search_post_data(base_url: str, page: int) -> list[tuple[str, str]]:
+    raw = (base_url or "").strip()
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    parsed = urlparse(raw)
+    pairs: list[tuple[str, str]] = []
+    for key, values in parse_qs(parsed.query, keep_blank_values=True).items():
+        for value in values:
+            pairs.append((key, value))
+
+    path_term = _search_term_from_path(parsed.path or "")
+    if path_term and not any(k == "search" for k, _ in pairs):
+        pairs.insert(0, ("search", path_term))
+
+    if not any(k == "search" for k, _ in pairs):
+        pairs.append(("search", ""))
+    if not any(k == "sort" for k, _ in pairs):
+        pairs.append(("sort", "0"))
+    if not any(k == "date" for k, _ in pairs):
+        pairs.append(("date", "0"))
+    if not any(k == "author" for k, _ in pairs):
+        pairs.append(("author", "0"))
+
+    pairs = [(k, v) for k, v in pairs if k.lower() != "page"]
+    pairs.append(("page", str(max(1, int(page) if page else 1))))
+    return pairs
+
+
+async def _fetch_search_html(base_url: str, page: int) -> str:
+    referer = base_url if base_url.startswith("http") else urljoin(BASE_SITE, base_url.lstrip("/"))
+    post_data = _search_post_data(base_url, page)
+    return await _fetch_text(
+        urljoin(BASE_SITE, "ajax_search.php"),
+        referer=referer,
+        method="POST",
+        data=post_data,
+    )
 
 
 def _parse_video_object_ld(soup: BeautifulSoup) -> dict[str, Any]:
@@ -276,19 +323,6 @@ def _extract_player_url(html: str, page_url: str) -> Optional[str]:
     return None
 
 
-async def _resolve_embed_stream(embed_url: str, *, referer: str) -> Optional[str]:
-    if not embed_url:
-        return None
-    html = await _fetch_text(embed_url, referer=referer)
-    m = _PASS_MD5_RE.search(html)
-    if not m:
-        return None
-
-    parsed = urlparse(embed_url)
-    pass_url = f"{parsed.scheme}://{parsed.netloc}{m.group(1)}"
-    return await _fetch_direct_url(pass_url, referer=embed_url)
-
-
 async def _streams_from_player(player_url: str, *, referer: str) -> dict[str, Any]:
     streams: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -302,18 +336,13 @@ async def _streams_from_player(player_url: str, *, referer: str) -> dict[str, An
 
     if iframe_src and iframe_src not in seen:
         seen.add(iframe_src)
-        mp4 = await _resolve_embed_stream(iframe_src, referer=player_url)
-        if mp4:
-            streams.append({"url": mp4, "quality": "default", "format": "mp4"})
         streams.append({"url": iframe_src, "quality": "embed", "format": "embed"})
 
     if player_url not in seen:
         seen.add(player_url)
         streams.append({"url": player_url, "quality": "player", "format": "embed"})
 
-    default = next((s["url"] for s in streams if s.get("format") == "mp4"), None)
-    if not default:
-        default = iframe_src or player_url
+    default = iframe_src or player_url
     return {
         "streams": streams,
         "hls": None,
@@ -436,19 +465,23 @@ def _build_list_page_url(base_url: str, page: int) -> str:
 
     page_num = max(1, int(page) if page else 1)
     parsed = urlparse(raw)
-    parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
 
+    if _is_search_list_url(raw):
+        pairs = _search_post_data(raw, page_num)
+        path = parsed.path or "/search/"
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", urlencode(pairs, doseq=True), ""))
+
+    parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
     if parts and parts[-1].isdigit():
         parts = parts[:-1]
 
-    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    if page_num <= 1:
-        query.pop("page", None)
-    else:
-        query["page"] = str(page_num)
+    query_pairs = list(parse_qsl(parsed.query, keep_blank_values=True))
+    query_pairs = [(k, v) for k, v in query_pairs if k.lower() != "page"]
+    if page_num > 1:
+        query_pairs.append(("page", str(page_num)))
 
     new_path = "/" + "/".join(parts) + ("/" if parts else "")
-    return urlunparse((parsed.scheme, parsed.netloc, new_path, "", urlencode(query), ""))
+    return urlunparse((parsed.scheme, parsed.netloc, new_path, "", urlencode(query_pairs), ""))
 
 
 def _parse_list_item(article: Any) -> Optional[dict[str, Any]]:
@@ -496,9 +529,13 @@ def _parse_list_item(article: Any) -> Optional[dict[str, Any]]:
 
 
 async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[dict[str, Any]]:
-    page_url = _build_list_page_url(base_url, page)
+    safe_limit = min(max(1, int(limit) if limit else 50), 120)
     try:
-        html = await _fetch_text(page_url, referer=base_url or BASE_SITE)
+        if _is_search_list_url(base_url):
+            html = await _fetch_search_html(base_url, page)
+        else:
+            page_url = _build_list_page_url(base_url, page)
+            html = await _fetch_text(page_url, referer=base_url or BASE_SITE)
     except Exception:
         return []
 
