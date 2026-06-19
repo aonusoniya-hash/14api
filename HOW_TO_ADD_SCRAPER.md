@@ -3519,3 +3519,73 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=okxxx"
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://ok.xxx/video/751489/"
 ```
 
+## PornHoarder (pornhoarder.tw) Implementation Notes
+
+[PornHoarder](https://ww2.pornhoarder.tw/) is a porn search/aggregator. Watch URLs use a slug plus base64 token: `https://ww2.pornhoarder.tw/video/{slug}/{token}/`.
+
+### Host aliases
+
+- `ww2.pornhoarder.tw`
+- `pornhoarder.tw`
+- `www.pornhoarder.tw`
+- `pornhoarder.net` (player host)
+- `pornhoarder.pictures` (thumbnails)
+- `playmogo.com` (DoodStream embed proxy)
+- `cloudatacdn.com` / `*.cloudatacdn.com` (resolved MP4 CDN)
+
+### Listing and pagination (`list_videos`)
+
+- Home feed: `https://ww2.pornhoarder.tw/hp/`
+- Trending: `/trending-videos/`
+- Random: `/random-videos/`
+- Tags: `/tag/{slug}/videos/`
+- Pornstars: `/pornstar/{slug}/videos/`
+- Studios: `/studio/{slug}/videos/`
+- Pagination: `?page={n}` on all list paths (do not use `/path/{n}/` for trending)
+- Parse `article` blocks: `a.video-link`, `.video-image[data-src]`, `.video-length`, `.video-content h1`
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch.
+
+Note: `/search/?search=...` list pages require client-side/session state and are not reliably scrapable via simple GET.
+
+### Metadata and streams (`scrape`)
+
+- **Metadata:** JSON-LD `VideoObject` + `h1` title + `.video-info` (duration, host, upload age) + tags section
+- **Player:** `embedUrl` → `https://pornhoarder.net/player.php?video={token}`
+- **Stream chain:**
+  1. `POST` player with `play=` (click-to-play gate)
+  2. Extract embed iframe (`playmogo.com/e/...` DoodStream wrapper)
+  3. Parse `/pass_md5/...` from embed page JS
+  4. `GET /pass_md5/...` returns signed `cloudatacdn.com` MP4 URL
+
+### Categories (`get_categories`)
+
+Home, trending, random, sample tags/pornstars/studios in `categories.json`.
+
+### Registration checklist for PornHoarder
+
+Package folder: `backend/app/scrapers/pornhoarder/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="pornhoarder"`)
+
+### PornHoarder verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://ww2.pornhoarder.tw/video/railey-diesel-see-through-chairs-fuck-2024/R0JjSWJjSnYweUJ0bnlSaGlLME5kVnJTL2h5M1dVYm1qOG13ckFQRVRIVT0=\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://ww2.pornhoarder.tw/trending-videos/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://ww2.pornhoarder.tw/tag/anal/videos/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=pornhoarder"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://ww2.pornhoarder.tw/video/railey-diesel-see-through-chairs-fuck-2024/R0JjSWJjSnYweUJ0bnlSaGlLME5kVnJTL2h5M1dVYm1qOG13ckFQRVRIVT0="
+```

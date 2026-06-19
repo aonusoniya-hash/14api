@@ -131,6 +131,14 @@ class ScrapeRequest(BaseModel):
             "www.ok.xxx",
             "static.ok.xxx",
             "cdn.privatehost.com",
+            "pornhoarder.tw",
+            "ww2.pornhoarder.tw",
+            "www.pornhoarder.tw",
+            "pornhoarder.net",
+            "www.pornhoarder.net",
+            "pornhoarder.pictures",
+            "playmogo.com",
+            "cloudatacdn.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -255,6 +263,14 @@ class ListRequest(BaseModel):
             "www.ok.xxx",
             "static.ok.xxx",
             "cdn.privatehost.com",
+            "pornhoarder.tw",
+            "ww2.pornhoarder.tw",
+            "www.pornhoarder.tw",
+            "pornhoarder.net",
+            "www.pornhoarder.net",
+            "pornhoarder.pictures",
+            "playmogo.com",
+            "cloudatacdn.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
