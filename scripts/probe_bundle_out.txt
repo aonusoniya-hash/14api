@@ -1,5 +1,0 @@
-﻿len 122274
-/ajax.php?type=favourites&action=
-/ajax.php?type=channel&action=
-/ajax.php?type=thumbs_up
-/ajax.php?type=watchlist&action=

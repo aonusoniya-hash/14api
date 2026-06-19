@@ -142,6 +142,9 @@ class ScrapeRequest(BaseModel):
             "yesporn.vip",
             "www.yesporn.vip",
             "yesnn.b-cdn.net",
+            "justporn.com",
+            "www.justporn.com",
+            "mjedge.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -277,6 +280,9 @@ class ListRequest(BaseModel):
             "yesporn.vip",
             "www.yesporn.vip",
             "yesnn.b-cdn.net",
+            "justporn.com",
+            "www.justporn.com",
+            "mjedge.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
