@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -201,6 +201,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if txxx.can_handle(host): return await txxx.scrape(url)
     if okxxx.can_handle(host): return await okxxx.scrape(url)
     if pornhoarder.can_handle(host): return await pornhoarder.scrape(url)
+    if yesporn.can_handle(host): return await yesporn.scrape(url)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, Any]]:
@@ -276,6 +277,7 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if txxx.can_handle(host): return await txxx.list_videos(base_url=base_url, page=page, limit=limit)
     if okxxx.can_handle(host): return await okxxx.list_videos(base_url=base_url, page=page, limit=limit)
     if pornhoarder.can_handle(host): return await pornhoarder.list_videos(base_url=base_url, page=page, limit=limit)
+    if yesporn.can_handle(host): return await yesporn.list_videos(base_url=base_url, page=page, limit=limit)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _crawl_dispatch(base_url: str, host: str, start_page: int, max_pages: int, per_page_limit: int, max_items: int) -> list[dict[str, Any]]:
@@ -489,6 +491,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s == "txxx": return [_category_item(c) for c in txxx.get_categories()]
         if s in ("okxxx", "ok.xxx"): return [_category_item(c) for c in okxxx.get_categories()]
         if s in ("pornhoarder", "pornhoarder.tv"): return [_category_item(c) for c in pornhoarder.get_categories()]
+        if s in ("yesporn", "yespornvip", "yesporn.vip"): return [_category_item(c) for c in yesporn.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load categories: {str(e)}")
