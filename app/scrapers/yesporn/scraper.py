@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
@@ -29,19 +28,13 @@ _VIDEO_HREF_RE = re.compile(
 )
 _FLASHVARS_BLOCK_RE = re.compile(r"var\s+flashvars\s*=\s*\{(.+?)\};", re.DOTALL)
 _FLASHVARS_PAIR_RE = re.compile(
-    r"(video_url|video_alt_url|video_alt_url2|video_url_text|video_alt_url_text|"
-    r"video_models|video_tags|video_categories|preview_url|video_title|video_id)\s*:\s*'([^']*)'",
+    r"(video_models|video_tags|video_categories|preview_url|video_title|video_id)\s*:\s*'([^']*)'",
     re.IGNORECASE,
 )
-_DOWNLOAD_HREF_RE = re.compile(
-    r'href="(https?://(?:www\.)?yesporn\.vip/get_file/[^"]+\.mp4[^"]*)"[^>]*>\s*(\d{3,4}p)',
+_EMBED_URL_RE = re.compile(
+    r"https?://(?:www\.)?yesporn\.vip/embed/(?P<id>\d+)",
     re.IGNORECASE,
 )
-_GET_FILE_RE = re.compile(
-    r"https?://(?:www\.)?yesporn\.vip/get_file/[^\s\"'<>]+",
-    re.IGNORECASE,
-)
-_KT_URL_PREFIX_RE = re.compile(r"^function/\d+/(https?://.+)$", re.IGNORECASE)
 
 
 def can_handle(host: str) -> bool:
@@ -102,22 +95,12 @@ def _clean_title(title: str | None) -> Optional[str]:
     return t or None
 
 
-def _resolve_kt_url(raw: str) -> str:
-    value = (raw or "").strip().replace("\\/", "/")
-    if not value:
-        return ""
-    m = _KT_URL_PREFIX_RE.match(value)
-    if m:
-        return m.group(1)
-    if value.startswith("//"):
-        return f"https:{value}"
-    return value
-
-
 def _normalize_media_url(url: str) -> str:
-    u = _resolve_kt_url(url)
+    u = (url or "").strip().replace("\\/", "/")
     if not u:
         return ""
+    if u.startswith("//"):
+        return f"https:{u}"
     if u.startswith("/"):
         return urljoin(BASE_SITE, u)
     return u
@@ -145,28 +128,6 @@ def _normalize_video_href(href: str) -> Optional[str]:
     return f"https://yesporn.vip/video/{m.group('id')}/{slug}/"
 
 
-def _quality_from_url_and_label(url: str, label: str | None) -> str:
-    low = (url or "").lower()
-    label_low = (label or "").lower().strip()
-    if label_low and label_low not in {"auto", "default"}:
-        qm = re.search(r"(\d{3,4})p?", label_low)
-        if qm:
-            return f"{qm.group(1)}p"
-        return label_low
-    qm = re.search(r"_(\d{3,4})p", low)
-    if qm:
-        return f"{qm.group(1)}p"
-    if "_720" in low or "720" in (label or ""):
-        return "720p"
-    if "_480" in low:
-        return "480p"
-    if "_1080" in low or "1080" in (label or ""):
-        return "1080p"
-    if "_360" in low:
-        return "360p"
-    return "default"
-
-
 def _parse_flashvars(html: str) -> dict[str, str]:
     out: dict[str, str] = {}
     m = _FLASHVARS_BLOCK_RE.search(html or "")
@@ -178,92 +139,41 @@ def _parse_flashvars(html: str) -> dict[str, str]:
     return out
 
 
-def _streams_from_html(html: str, video_url: str) -> dict[str, Any]:
-    streams: list[dict[str, str]] = []
-    seen: set[str] = set()
+def _extract_embed_url(html: str, video_url: str) -> Optional[str]:
     flash = _parse_flashvars(html)
+    video_id = _extract_video_id(video_url) or flash.get("video_id")
+    if video_id and str(video_id).isdigit():
+        return f"https://yesporn.vip/embed/{video_id}"
 
-    stream_keys = (
-        ("video_url", "video_url_text"),
-        ("video_alt_url", "video_alt_url_text"),
-        ("video_alt_url2", "video_alt_url_text"),
-    )
-    for url_key, label_key in stream_keys:
-        raw = flash.get(url_key)
+    for script in BeautifulSoup(html, "lxml").find_all("script", attrs={"type": "application/ld+json"}):
+        raw = (script.string or script.get_text() or "").strip()
         if not raw:
             continue
-        media = _normalize_media_url(raw)
-        if not media or media in seen or "/get_file/" not in media:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
             continue
-        if "_preview" in media.lower():
-            continue
-        seen.add(media)
-        label = flash.get(label_key)
-        fmt = "hls" if ".m3u8" in media.lower() else "mp4"
-        streams.append(
-            {
-                "url": media,
-                "quality": _quality_from_url_and_label(media, label),
-                "format": fmt,
-            }
-        )
+        if isinstance(data, dict):
+            embed = data.get("embedUrl")
+            if embed:
+                return _normalize_media_url(str(embed))
 
-    for href, quality_label in _DOWNLOAD_HREF_RE.findall(html):
-        media = _normalize_media_url(href.split("&download=", 1)[0])
-        if not media or media in seen or "_preview" in media.lower():
-            continue
-        seen.add(media)
-        streams.append(
-            {
-                "url": media,
-                "quality": _quality_from_url_and_label(media, quality_label),
-                "format": "mp4",
-            }
-        )
+    match = _EMBED_URL_RE.search(html or "")
+    if match:
+        return f"https://yesporn.vip/embed/{match.group('id')}"
+    return None
 
-    for media in _GET_FILE_RE.findall(html.replace("\\/", "/")):
-        media = _normalize_media_url(media)
-        if not media or media in seen or "_preview" in media.lower():
-            continue
-        if not media.lower().endswith((".mp4", ".mp4/", ".m3u8", ".m3u8/")):
-            continue
-        seen.add(media)
-        streams.append(
-            {
-                "url": media,
-                "quality": _quality_from_url_and_label(media, None),
-                "format": "hls" if ".m3u8" in media.lower() else "mp4",
-            }
-        )
 
-    video_id = _extract_video_id(video_url) or flash.get("video_id")
-    if video_id:
-        embed = f"https://yesporn.vip/embed/{video_id}"
-        if embed not in seen:
-            seen.add(embed)
-            streams.append({"url": embed, "quality": "embed", "format": "embed"})
-
-    def _score(item: dict[str, str]) -> tuple[int, int]:
-        fmt = (item.get("format") or "").lower()
-        qtxt = item.get("quality") or ""
-        q = re.search(r"(\d{3,4})", qtxt)
-        qnum = int(q.group(1)) if q else 0
-        if fmt == "mp4":
-            return (3, qnum)
-        if fmt == "hls":
-            return (2, qnum)
-        return (1, qnum)
-
-    streams.sort(key=_score, reverse=True)
-    hls = next((s["url"] for s in streams if s.get("format") == "hls"), None)
-    default = next((s["url"] for s in streams if s.get("format") == "mp4"), None)
-    if not default:
-        default = hls or (streams[0]["url"] if streams else None)
+def _streams_from_html(html: str, video_url: str) -> dict[str, Any]:
+    embed = _extract_embed_url(html, video_url)
+    streams: list[dict[str, str]] = []
+    if embed:
+        streams.append({"url": embed, "quality": "embed", "format": "embed"})
     return {
         "streams": streams,
-        "hls": hls,
-        "default": default,
-        "has_video": bool(streams),
+        "hls": None,
+        "default": embed,
+        "has_video": bool(embed),
     }
 
 
@@ -299,99 +209,6 @@ async def fetch_page(url: str, *, referer: str | None = None) -> str:
     if referer:
         headers["Referer"] = referer
     return await pool_fetch_html(url, headers=headers)
-
-
-async def _resolve_get_file_url(get_file_url: str, *, referer: str) -> Optional[str]:
-    try:
-        from curl_cffi.requests import AsyncSession
-    except ImportError:
-        return None
-
-    raw = get_file_url.strip()
-    if not raw:
-        return None
-    headers = {
-        "User-Agent": _DEFAULT_HEADERS["User-Agent"],
-        "Referer": referer if referer.startswith("http") else BASE_SITE,
-        "Accept": "*/*",
-    }
-
-    async def _attempt(target: str) -> Optional[str]:
-        async with AsyncSession(impersonate="chrome120", headers=headers, timeout=20.0) as client:
-            resp = await client.get(target, allow_redirects=False)
-            if resp.status_code in (301, 302, 303, 307, 308):
-                loc = resp.headers.get("Location") or resp.headers.get("location")
-                if loc and loc.startswith("http") and "yesporn.vip/get_file" not in loc.lower():
-                    return loc
-        return None
-
-    candidates = [raw]
-    if not raw.endswith("/"):
-        candidates.append(raw + "/")
-
-    for target in candidates:
-        try:
-            resolved = await asyncio.wait_for(_attempt(target), timeout=16.0)
-            if resolved:
-                return resolved
-        except Exception:
-            continue
-    return None
-
-
-def _url_contains_video_id(url: str, video_id: str) -> bool:
-    low = (url or "").lower()
-    vid = str(video_id).lower()
-    return f"/{vid}/" in low or f"/{vid}." in low or f"/{vid}?" in low
-
-
-async def _resolve_video_streams(video: dict[str, Any], *, referer: str) -> None:
-    streams: list[dict[str, str]] = video.get("streams") or []
-    get_file_streams = [
-        s for s in streams if s.get("format") == "mp4" and "get_file" in (s.get("url") or "").lower()
-    ]
-    if not get_file_streams:
-        return
-
-    video_id = _extract_video_id(referer)
-    unique_by_url = {s["url"]: s for s in get_file_streams}
-
-    async def _resolve_one(stream: dict[str, str]) -> tuple[dict[str, str], Optional[str]]:
-        resolved = await _resolve_get_file_url(stream["url"], referer=referer)
-        return stream, resolved
-
-    pairs = await asyncio.gather(*[_resolve_one(s) for s in unique_by_url.values()])
-    for stream, resolved in pairs:
-        if not resolved:
-            continue
-        if video_id and not _url_contains_video_id(resolved, video_id):
-            continue
-        stream["url"] = resolved
-
-    remote_mp4 = [
-        s
-        for s in streams
-        if s.get("format") == "mp4" and "get_file" not in (s.get("url") or "").lower()
-    ]
-    get_file_mp4 = [
-        s for s in streams if s.get("format") == "mp4" and "get_file" in (s.get("url") or "").lower()
-    ]
-    hls = next((s for s in streams if s.get("format") == "hls"), None)
-    embed = next((s for s in streams if s.get("format") == "embed"), None)
-
-    if remote_mp4:
-        video["default"] = remote_mp4[0]["url"]
-    elif get_file_mp4:
-        video["default"] = get_file_mp4[0]["url"]
-    elif hls:
-        video["default"] = hls["url"]
-    elif embed:
-        video["default"] = embed["url"]
-    else:
-        video["default"] = None
-
-    video["hls"] = hls["url"] if hls else None
-    video["has_video"] = bool(remote_mp4) or bool(get_file_mp4) or bool(hls) or bool(embed)
 
 
 def _best_image_url(img: Any) -> Optional[str]:
@@ -430,10 +247,11 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
     flash = _parse_flashvars(html)
 
+    title_el = soup.select_one("h1.title")
     title = _clean_title(
         _first_non_empty(
             _meta(soup, prop="og:title"),
-            soup.select_one("h1.title").get_text(" ", strip=True) if soup.select_one("h1.title") else None,
+            title_el.get_text(" ", strip=True) if title_el else None,
             flash.get("video_title"),
             soup.title.get_text(strip=True) if soup.title else None,
         )
@@ -488,9 +306,7 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
 async def scrape(url: str) -> dict[str, Any]:
     canon = _normalize_video_href(url) or url
     html = await fetch_page(canon, referer=canon)
-    data = parse_video_page(html, canon)
-    await _resolve_video_streams(data.get("video", {}), referer=canon)
-    return data
+    return parse_video_page(html, canon)
 
 
 def _build_list_page_url(base_url: str, page: int) -> str:
