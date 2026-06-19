@@ -139,6 +139,9 @@ class ScrapeRequest(BaseModel):
             "pornhoarder.pictures",
             "playmogo.com",
             "cloudatacdn.com",
+            "yesporn.vip",
+            "www.yesporn.vip",
+            "yesnn.b-cdn.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -271,6 +274,9 @@ class ListRequest(BaseModel):
             "pornhoarder.pictures",
             "playmogo.com",
             "cloudatacdn.com",
+            "yesporn.vip",
+            "www.yesporn.vip",
+            "yesnn.b-cdn.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
