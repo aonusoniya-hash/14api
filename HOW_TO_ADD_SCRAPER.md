@@ -3458,4 +3458,64 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=porndig"
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.porndig.com/videos/254839/hayley-davies-hopes-he-ll-shove-it-all-the-way-inside-her.html"
 ```
 
+## OK.XXX (ok.xxx) Implementation Notes
+
+[OK.XXX](https://ok.xxx/) is a Private Host tube site. Watch URLs use a numeric video ID: `https://ok.xxx/video/{id}/` (e.g. `/video/751489/`). Embed URLs: `https://ok.xxx/embed/{id}`.
+
+### Host aliases
+
+- `ok.xxx`
+- `www.ok.xxx`
+- `static.ok.xxx` (thumbnails/screenshots)
+- `cdn.privatehost.com` (resolved MP4/HLS streams)
+
+### Listing and pagination (`list_videos`)
+
+- Main feed: `https://ok.xxx/` (page 2+ → `?page={n}`)
+- Sort feeds: `/popular/`, `/trending/` (page 2+ → `/{n}/` or `?page={n}`)
+- Tags: `/tags/{slug}/` (e.g. `/tags/anal/`)
+- Sites/channels: `/sites/{slug}/` (e.g. `/sites/brazzers/`) — not `/channels/{slug}/`
+- Models: `/models/{slug}/`
+- Search: `/search/?q={query}` (page 2+ → `?q={query}&page={n}` or `/search/{n}/?q={query}`)
+- Parse `.item.thumb-bl` / `.item.thumb-bl-video` blocks: `a[href*='/video/']`, `img[data-original]`, `data-preview-custom`, `.video-meta` for duration/views
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch; fall back to pooled `fetch_html`.
+
+### Metadata and streams (`scrape`)
+
+- **Metadata:** JSON-LD `VideoObject` (`name`, `description`, `thumbnailUrl`, `duration` as ISO `PT…`, `uploadDate`, `author`, `actor`, `keywords`, `interactionStatistic.userInteractionCount` for views)
+- **Streams:** `<video><source>` tags with `/get_file/…` MP4 URLs (360p/480p/720p labels)
+- **Redirect resolution:** `/get_file/` URLs 302 to signed `cdn.privatehost.com` links — resolve with `Referer: https://ok.xxx/video/{id}/`
+
+### Categories (`get_categories`)
+
+New, Popular, Trending, common tags, and sample `/sites/{slug}/` entries in `categories.json`.
+
+### Registration checklist for OK.XXX
+
+Package folder: `backend/app/scrapers/okxxx/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="okxxx"`)
+
+### OK.XXX verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://ok.xxx/video/751489/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://ok.xxx/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://ok.xxx/sites/brazzers/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=okxxx"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://ok.xxx/video/751489/"
+```
 

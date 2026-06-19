@@ -127,6 +127,10 @@ class ScrapeRequest(BaseModel):
             "txxx.tube",
             "www.txxx.tube",
             "tn.txxx.tube",
+            "ok.xxx",
+            "www.ok.xxx",
+            "static.ok.xxx",
+            "cdn.privatehost.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
@@ -247,6 +251,10 @@ class ListRequest(BaseModel):
             "txxx.tube",
             "www.txxx.tube",
             "tn.txxx.tube",
+            "ok.xxx",
+            "www.ok.xxx",
+            "static.ok.xxx",
+            "cdn.privatehost.com",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
             return v
