@@ -155,6 +155,11 @@ def _parse_flashvars(html: str) -> dict[str, str]:
     return out
 
 
+def _is_embed_page_url(url: str) -> bool:
+    low = (url or "").lower()
+    return "/embed/" in low and "get_file" not in low and not low.endswith(".mp4")
+
+
 def _extract_embed_url(html: str, video_url: str) -> Optional[str]:
     flash = _parse_flashvars(html)
     video_id = _extract_video_id(video_url) or flash.get("video_id")
@@ -171,7 +176,7 @@ def _extract_embed_url(html: str, video_url: str) -> Optional[str]:
             continue
         if isinstance(data, dict):
             embed = data.get("embedUrl")
-            if embed:
+            if embed and _is_embed_page_url(str(embed)):
                 return _normalize_media_url(str(embed))
 
     match = _EMBED_URL_RE.search(html or "")
@@ -350,11 +355,6 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
         channel_link.get_text(" ", strip=True) if channel_link else None,
     )
 
-    preview_url = None
-    img_preview = soup.select_one("img[data-preview]")
-    if img_preview and img_preview.get("data-preview"):
-        preview_url = _normalize_media_url(str(img_preview.get("data-preview")))
-
     video = _streams_from_html(html, url)
 
     return {
@@ -370,7 +370,7 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
         "upload_date": upload_date,
         "video": video,
         "related_videos": [],
-        "preview_url": preview_url,
+        "preview_url": None,
     }
 
 
@@ -559,9 +559,6 @@ def _parse_list_item(box: Any) -> Optional[dict[str, Any]]:
 
     img = box.select_one("img")
     thumb = _best_image_url(img)
-    preview = None
-    if img and img.get("data-preview"):
-        preview = _normalize_media_url(str(img.get("data-preview")))
 
     title_el = box.select_one(".title")
     title = _clean_list_title(
@@ -590,7 +587,7 @@ def _parse_list_item(box: Any) -> Optional[dict[str, Any]]:
         "duration": duration,
         "views": views,
         "uploader_name": None,
-        "preview_url": preview,
+        "preview_url": None,
     }
 
 

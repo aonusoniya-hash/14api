@@ -38,6 +38,8 @@ async def main() -> None:
     assert result["video"]["has_video"]
     assert result["video"]["default"].startswith("https://www.whoreshub.com/embed/")
     assert all(s["format"] == "embed" for s in result["video"]["streams"])
+    assert result["preview_url"] is None
+    assert "get_file" not in str(result["video"])
     print("OK")
 
 
