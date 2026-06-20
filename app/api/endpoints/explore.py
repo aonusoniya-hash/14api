@@ -744,7 +744,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.justporn.com/latest-updates/",
+        baseUrl="https://www.justporn.com/",
         nickname="JustPorn",
         favicon="https://www.justporn.com/favicon.ico",
         accentColor="#1565C0",
@@ -757,7 +757,7 @@ EXPLORE_SOURCES = [
         pageSize=40,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.porngo.com/latest-updates/",
+        baseUrl="https://www.porngo.com/",
         nickname="PornGO",
         favicon="https://www.porngo.com/favicon-32x32.png",
         accentColor="#E53935",
@@ -770,7 +770,7 @@ EXPLORE_SOURCES = [
         pageSize=40,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.whoreshub.com/latest-updates/",
+        baseUrl="https://www.whoreshub.com/",
         nickname="WhoresHub",
         favicon="https://www.whoreshub.com/favicon.ico",
         accentColor="#FA0052",
