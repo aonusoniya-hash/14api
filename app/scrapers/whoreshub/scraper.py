@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -20,7 +21,22 @@ _DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": BASE_SITE,
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
+
+_CURL_IMPERSONATIONS = (
+    "chrome124",
+    "chrome120",
+    "chrome110",
+    "chrome107",
+    "edge101",
+    "edge99",
+    "safari15_3",
+)
 
 _VIDEO_HREF_RE = re.compile(
     r"whoreshub\.com/videos/(?P<id>\d+)/(?P<slug>[^/?#]+)/?",
@@ -177,21 +193,59 @@ def _streams_from_html(html: str, video_url: str) -> dict[str, Any]:
     }
 
 
-async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> Optional[str]:
+def _request_headers(referer: str | None = None) -> dict[str, str]:
+    headers = dict(_DEFAULT_HEADERS)
+    ref = (referer or BASE_SITE).strip()
+    headers["Referer"] = ref
+    if ref.rstrip("/") != BASE_SITE.rstrip("/"):
+        headers["Sec-Fetch-Site"] = "same-origin"
+    return headers
+
+
+def _looks_like_whoreshub_html(text: str) -> bool:
+    if not text or len(text) < 200:
+        return False
+    low = text.lower()
+    if "cf-browser-verification" in low or "just a moment" in low:
+        return False
+    if "<html" not in low and "<!doctype" not in low:
+        return False
+    return any(
+        marker in low
+        for marker in ("whoreshub", "/videos/", "list_videos", "kt_player", "flashvars")
+    )
+
+
+def _curl_get_sync(url: str, referer: str | None = None) -> Optional[str]:
+    try:
+        from curl_cffi.requests.session import Session
+    except ImportError:
+        return None
+
+    headers = _request_headers(referer)
+    for imp in _CURL_IMPERSONATIONS:
+        try:
+            with Session(impersonate=imp, headers=headers, timeout=30) as session:
+                resp = session.get(url, allow_redirects=True)
+                if resp.status_code == 200 and _looks_like_whoreshub_html(resp.text):
+                    return resp.text
+        except Exception:
+            continue
+    return None
+
+
+async def _curl_get_async(url: str, referer: str | None = None) -> Optional[str]:
     try:
         from curl_cffi.requests import AsyncSession
     except ImportError:
         return None
 
-    headers = dict(_DEFAULT_HEADERS)
-    if referer:
-        headers["Referer"] = referer
-
-    for imp in ("chrome120", "chrome110", "safari15_3"):
+    headers = _request_headers(referer)
+    for imp in _CURL_IMPERSONATIONS:
         try:
-            async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
+            async with AsyncSession(impersonate=imp, headers=headers, timeout=30.0) as client:
+                resp = await client.get(url, allow_redirects=True)
+                if resp.status_code == 200 and _looks_like_whoreshub_html(resp.text):
                     return resp.text
         except Exception:
             continue
@@ -199,16 +253,18 @@ async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> Opti
 
 
 async def fetch_page(url: str, *, referer: str | None = None) -> str:
-    text = await _fetch_with_curl_cffi(url, referer=referer or BASE_SITE)
+    ref = referer or BASE_SITE
+
+    # Sync curl_cffi is more reliable under uvicorn / Windows proactor loops.
+    text = await asyncio.to_thread(_curl_get_sync, url, ref)
     if text:
         return text
 
-    from app.core.pool import fetch_html as pool_fetch_html
+    text = await _curl_get_async(url, ref)
+    if text:
+        return text
 
-    headers = dict(_DEFAULT_HEADERS)
-    if referer:
-        headers["Referer"] = referer
-    return await pool_fetch_html(url, headers=headers)
+    raise RuntimeError(f"whoreshub fetch blocked or failed: {url}")
 
 
 def _best_image_url(img: Any) -> Optional[str]:
