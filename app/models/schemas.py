@@ -146,6 +146,9 @@ class ScrapeRequest(BaseModel):
             "www.justporn.com",
             "porngo.com",
             "www.porngo.com",
+            "whoreshub.com",
+            "www.whoreshub.com",
+            "wh.cdntrex.com",
             "mjedge.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
@@ -286,6 +289,9 @@ class ListRequest(BaseModel):
             "www.justporn.com",
             "porngo.com",
             "www.porngo.com",
+            "whoreshub.com",
+            "www.whoreshub.com",
+            "wh.cdntrex.com",
             "mjedge.net",
         ]
         if any(host.endswith(domain) for domain in allowed_domains):
