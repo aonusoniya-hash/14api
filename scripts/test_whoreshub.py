@@ -10,7 +10,7 @@ async def main() -> None:
     pages: dict[int, list[str]] = {}
     for page in (1, 2, 3):
         items = await whoreshub.list_videos(
-            "https://www.whoreshub.com/latest-updates/",
+            "https://www.whoreshub.com/",
             page=page,
             limit=8,
         )

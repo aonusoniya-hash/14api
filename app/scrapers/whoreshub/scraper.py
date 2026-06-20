@@ -266,6 +266,11 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
         _meta(soup, prop="og:image"),
         flash.get("preview_url"),
     )
+    if not thumbnail:
+        for link in soup.select('link[rel="preload"][as="image"][href*="videos_screenshots"]'):
+            thumbnail = str(link.get("href") or "")
+            if thumbnail:
+                break
     if thumbnail:
         thumbnail = _normalize_media_url(thumbnail)
 
@@ -319,42 +324,92 @@ async def scrape(url: str) -> dict[str, Any]:
     return parse_video_page(html, canon)
 
 
+_SKIP_LIST_BLOCK_RE = re.compile(
+    r"related|watched_right_now|most_recent|album|trend|search_results|aside|popular_tags",
+    re.IGNORECASE,
+)
+
+
+def _list_path_parts(base_url: str) -> list[str]:
+    raw = (base_url or "").strip() or BASE_SITE
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    parsed = urlparse(raw)
+    parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
+    if parts and parts[-1].isdigit():
+        parts = parts[:-1]
+    return parts
+
+
+def _is_homepage(base_url: str) -> bool:
+    return not _list_path_parts(base_url)
+
+
 def _normalize_list_path(base_url: str) -> str:
     raw = (base_url or "").strip() or BASE_SITE
     if not raw.startswith("http"):
         raw = urljoin(BASE_SITE, raw.lstrip("/"))
 
     parsed = urlparse(raw)
-    parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
-    if parts and parts[-1].isdigit():
-        parts = parts[:-1]
+    parts = _list_path_parts(base_url)
 
     if not parts:
-        path = "/latest-updates/"
+        path = "/"
     else:
         path = "/" + "/".join(parts) + "/"
 
     return urlunparse((parsed.scheme or "https", parsed.netloc or f"www.{SITE_HOST}", path, "", "", ""))
 
 
-def _list_section_candidates(base_url: str) -> list[str]:
-    path = (urlparse(_normalize_list_path(base_url)).path or "/").lower().rstrip("/") or "/"
+def _pagination_list_path(base_url: str) -> str:
+    parts = _list_path_parts(base_url)
+    if not parts:
+        return "/latest-updates/"
+    return "/" + "/".join(parts) + "/"
 
+
+def _page_path_key(page_url: str) -> str:
+    parsed = urlparse(page_url)
+    parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
+    if parts and parts[-1].isdigit():
+        parts = parts[:-1]
+    if not parts:
+        return "/"
+    return "/" + "/".join(parts)
+
+
+def _list_section_candidates(page_url: str) -> list[str]:
+    path = _page_path_key(page_url).lower().rstrip("/") or "/"
+
+    if path == "/":
+        return [
+            "list_videos_recently_added_videos_items",
+            "custom_list_videos_recently_added_videos_items",
+        ]
     if path == "/latest-updates":
         return [
             "list_videos_latest_videos_list_items",
             "custom_list_videos_latest_videos_list_items",
             "list_videos_common_videos_list_items",
             "custom_list_videos_common_videos_list_items",
-            "list_videos_most_recent_videos_items",
-            "custom_list_videos_most_recent_videos_items",
         ]
-    if path.startswith("/categories/") or path.startswith("/search/") or path.startswith("/tags/"):
+    if path == "/top-rated":
         return [
+            "list_videos_top_rated_videos_list_items",
+            "custom_list_videos_top_rated_videos_list_items",
             "list_videos_common_videos_list_items",
             "custom_list_videos_common_videos_list_items",
         ]
-    if path in ("/most-viewed", "/most-popular", "/top-rated", "/longest"):
+    if path in ("/most-popular", "/most-viewed"):
+        return [
+            "list_videos_most_popular_videos_list_items",
+            "list_videos_most_viewed_videos_list_items",
+            "custom_list_videos_most_popular_videos_list_items",
+            "custom_list_videos_most_viewed_videos_list_items",
+            "list_videos_common_videos_list_items",
+            "custom_list_videos_common_videos_list_items",
+        ]
+    if path.startswith("/categories/") or path.startswith("/search/") or path.startswith("/tags/"):
         return [
             "list_videos_common_videos_list_items",
             "custom_list_videos_common_videos_list_items",
@@ -367,47 +422,71 @@ def _list_section_candidates(base_url: str) -> list[str]:
     return [
         "list_videos_common_videos_list_items",
         "custom_list_videos_common_videos_list_items",
-        "list_videos_most_recent_videos_items",
+        "list_videos_latest_videos_list_items",
     ]
 
 
-def _list_root(soup: BeautifulSoup, base_url: str) -> Any:
-    for section_id in _list_section_candidates(base_url):
+def _block_has_videos(root: Any) -> bool:
+    return bool(root and root.select("a[href*='/videos/']"))
+
+
+def _list_root(soup: BeautifulSoup, page_url: str) -> Any:
+    for section_id in _list_section_candidates(page_url):
+        if _SKIP_LIST_BLOCK_RE.search(section_id):
+            continue
         root = soup.select_one(f"#{section_id}")
-        if root is not None:
+        if _block_has_videos(root):
             return root
         base_id = section_id.removesuffix("_items")
+        if _SKIP_LIST_BLOCK_RE.search(base_id):
+            continue
         root = soup.select_one(f"#{base_id}")
-        if root is not None:
+        if _block_has_videos(root):
             return root
 
     for pag in soup.select("[id*='pagination']"):
         pag_id = (pag.get("id") or "").lower()
-        if "watched_right_now" in pag_id or "album" in pag_id or "recently_added" in pag_id:
+        if _SKIP_LIST_BLOCK_RE.search(pag_id):
             continue
         container = pag.find_parent("section") or pag.find_parent("div", class_=re.compile(r"section-row|thumbs"))
-        if container and container.select("a[href*='/videos/']"):
+        if _block_has_videos(container):
             return container
 
-    thumbs = soup.select_one(".thumbs:not(.thumbs--albums)")
-    if thumbs and thumbs.select("a[href*='/videos/']"):
-        return thumbs
+    for thumbs in soup.select(".thumbs:not(.thumbs--albums)"):
+        thumbs_id = (thumbs.get("id") or "").lower()
+        if _SKIP_LIST_BLOCK_RE.search(thumbs_id):
+            continue
+        if _block_has_videos(thumbs):
+            return thumbs
     return None
 
 
 def _build_list_page_url(base_url: str, page: int) -> str:
-    normalized = _normalize_list_path(base_url)
-    parsed = urlparse(normalized)
+    raw = (base_url or "").strip() or BASE_SITE
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+
+    parsed = urlparse(raw)
+    page_num = max(1, int(page) if page else 1)
+
+    if _is_homepage(base_url):
+        if page_num <= 1:
+            return urlunparse((parsed.scheme or "https", parsed.netloc or f"www.{SITE_HOST}", "/", "", "", ""))
+        paginated = urlparse(urljoin(BASE_SITE, _pagination_list_path(base_url)))
+        query = {"from": str(page_num)}
+        return urlunparse((paginated.scheme, paginated.netloc, paginated.path, "", urlencode(query), ""))
+
+    paginated_path = _pagination_list_path(base_url)
+    paginated = urlparse(urljoin(BASE_SITE, paginated_path))
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     query.pop("page", None)
     query.pop("from", None)
 
-    page_num = max(1, int(page) if page else 1)
     if page_num <= 1:
-        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", urlencode(query), ""))
+        return urlunparse((paginated.scheme, paginated.netloc, paginated.path, "", urlencode(query), ""))
 
     query["from"] = str(page_num)
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", urlencode(query), ""))
+    return urlunparse((paginated.scheme, paginated.netloc, paginated.path, "", urlencode(query), ""))
 
 
 def _parse_list_item(box: Any) -> Optional[dict[str, Any]]:
@@ -415,7 +494,7 @@ def _parse_list_item(box: Any) -> Optional[dict[str, Any]]:
     if "item--adv-thumb" in classes or "avd-video-item" in classes:
         return None
 
-    link = box.select_one("a[href*='/videos/']")
+    link = box.select_one("a.item[href*='/videos/'], a[href*='/videos/']")
     if not link:
         return None
     href = _normalize_video_href(link.get("href") or "")
@@ -468,14 +547,16 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
         return []
 
     soup = BeautifulSoup(html, "lxml")
-    root = _list_root(soup, base_url)
+    root = _list_root(soup, page_url)
     if root is None:
         return []
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    boxes = root.select(".thumb.item, .thumb.thumb_rel.item, .thumb")
+    boxes = root.select(":scope > .thumb")
+    if not boxes:
+        boxes = root.select(".thumb")
     if not boxes:
         boxes = root.select(".item")
 
@@ -489,7 +570,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
         items.append(parsed)
 
     if not items:
-        for a in root.select("a[href*='/videos/']"):
+        for a in root.select("a.item[href*='/videos/'], a[href*='/videos/']"):
             if len(items) >= limit:
                 break
             href = _normalize_video_href(a.get("href") or "")
