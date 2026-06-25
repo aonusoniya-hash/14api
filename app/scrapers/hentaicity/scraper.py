@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
@@ -50,6 +49,10 @@ _JSON_LD_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _MP4_QUALITIES = ("1080p", "720p", "480p", "mobile")
+_HOMEPAGE_LISTING = "videos/straight/all-popular.html"
+_TAG_PAGE_SUFFIX_RE = re.compile(r"^(tags/video/.+?)/(\d+)$", re.IGNORECASE)
+_HTML_PAGE_SUFFIX_RE = re.compile(r"^(.+)-(\d+)\.html$", re.IGNORECASE)
+_CLICK_PAGE_PREFIX_RE = re.compile(r"/click/(\d+)-\d+/video/", re.IGNORECASE)
 
 
 def can_handle(host: str) -> bool:
@@ -224,33 +227,25 @@ def _best_image_url(img: Any) -> Optional[str]:
 
 
 async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
-    from curl_cffi import requests as cr
+    from curl_cffi.requests import AsyncSession
 
     headers = dict(_DEFAULT_HEADERS)
     if referer:
         headers["Referer"] = referer
 
-    def _do_request() -> str:
-        for imp in ("chrome120", "chrome110", "safari15_3"):
-            try:
-                resp = cr.get(
-                    url,
-                    headers=headers,
-                    impersonate=imp,
-                    timeout=45.0,
-                    allow_redirects=True,
-                )
+    for imp in ("chrome120", "chrome110", "safari15_3"):
+        try:
+            async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
+                resp = await client.get(url, allow_redirects=True)
                 if resp.status_code != 200:
                     continue
                 text = resp.text
                 if _is_cloudflare_challenge(text):
                     continue
                 return text
-            except Exception:
-                continue
-        raise ValueError(f"Failed to fetch: {url}")
-
-    return await asyncio.to_thread(_do_request)
+        except Exception:
+            continue
+    raise ValueError(f"Failed to fetch: {url}")
 
 
 async def fetch_page(url: str, *, referer: str | None = None) -> str:
@@ -316,7 +311,29 @@ def _streams_from_html(html: str) -> dict[str, Any]:
     }
 
 
-def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]]:
+def _normalize_list_path(path: str) -> str:
+    raw = (path or "").strip().strip("/")
+    if not raw:
+        return ""
+    m_tag = _TAG_PAGE_SUFFIX_RE.match(raw)
+    if m_tag:
+        return m_tag.group(1)
+    if raw.endswith(".html"):
+        base = raw[:-5]
+        m_html = _HTML_PAGE_SUFFIX_RE.match(base)
+        if m_html:
+            return f"{m_html.group(1)}.html"
+    return raw
+
+
+def _click_matches_page(href: str, page: int) -> bool:
+    if page <= 1:
+        return True
+    m = _CLICK_PAGE_PREFIX_RE.search(href or "")
+    return bool(m and m.group(1) == str(page))
+
+
+def _parse_list_items(soup: BeautifulSoup, *, limit: int, page: int = 1) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -328,7 +345,10 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
         link = title_link or thumb_link
         if not link:
             continue
-        url = _normalize_video_href(link.get("href") or "")
+        href = link.get("href") or ""
+        if "/click/" in href and not _click_matches_page(href, page):
+            continue
+        url = _normalize_video_href(href)
         if not url or url in seen:
             continue
         seen.add(url)
@@ -339,10 +359,9 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
                 img.get("alt") if img else None,
             )
         ) or "Unknown Video"
+        duration_el = block.select_one(".time")
         duration = _first_non_empty(
-            (block.select_one(".time") or {}).get_text(strip=True)
-            if block.select_one(".time")
-            else None
+            duration_el.get_text(strip=True) if duration_el else None
         )
         items.append(
             {
@@ -361,7 +380,10 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
     for link in soup.select('a[href*="/click/"][href*="/video/"], a[href*="/video/"][href$=".html"]'):
         if len(items) >= limit:
             break
-        url = _normalize_video_href(link.get("href") or "")
+        href = link.get("href") or ""
+        if "/click/" in href and not _click_matches_page(href, page):
+            continue
+        url = _normalize_video_href(href)
         if not url or url in seen:
             continue
         seen.add(url)
@@ -384,20 +406,44 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     if not raw.startswith("http"):
         raw = urljoin(BASE_SITE, raw.lstrip("/"))
     parsed = urlparse(raw)
+    path = _normalize_list_path(parsed.path or "")
     page_num = max(1, int(page) if page else 1)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    if page_num <= 1:
-        query.pop("page", None)
+    query.pop("page", None)
+
+    if not path:
+        if query.get("s"):
+            new_path = "/"
+            if page_num > 1:
+                query["page"] = str(page_num)
+            return urlunparse(
+                (
+                    parsed.scheme or "https",
+                    parsed.netloc or SITE_HOST,
+                    new_path,
+                    "",
+                    urlencode(query),
+                    "",
+                )
+            )
+        path = _HOMEPAGE_LISTING
+
+    if path.startswith("tags/video/"):
+        base_path = f"/{path.rstrip('/')}"
+        new_path = base_path if page_num <= 1 else f"{base_path}/{page_num}/"
+    elif path.endswith(".html"):
+        stem = path[:-5]
+        new_path = f"/{path}" if page_num <= 1 else f"/{stem}-{page_num}.html"
     else:
-        query["page"] = str(page_num)
-    new_query = urlencode(query)
+        new_path = f"/{path}/" if page_num <= 1 else f"/{path}/{page_num}/"
+
     return urlunparse(
         (
             parsed.scheme or "https",
             parsed.netloc or SITE_HOST,
-            parsed.path or "/",
+            new_path,
             "",
-            new_query,
+            urlencode(query),
             "",
         )
     )
@@ -412,13 +458,15 @@ def parse_video_page(
     soup = BeautifulSoup(html, "lxml")
     page_url = _resolve_video_url(url) or url.rstrip("/")
     json_ld = _parse_json_ld(html)
+    h1 = soup.select_one("h1")
+    page_title = soup.title
 
     title = _clean_title(
         _first_non_empty(
             _meta(soup, prop="og:title"),
-            json_ld.get("name"),
-            soup.select_one("h1").get_text(strip=True) if soup.select_one("h1") else None,
-            soup.title.get_text(strip=True) if soup.title else None,
+            str(json_ld.get("name") or "").strip() or None,
+            h1.get_text(strip=True) if h1 else None,
+            page_title.get_text(strip=True) if page_title else None,
         )
     ) or "Unknown Video"
 
@@ -462,7 +510,7 @@ def parse_video_page(
         if tag and tag not in tags and tag.lower() != (uploader or "").lower():
             tags.append(tag)
 
-    related = _parse_list_items(soup, limit=40)
+    related = _parse_list_items(soup, limit=40, page=1)
     related = [r for r in related if r.get("url") != page_url]
 
     video_data = video or _streams_from_html(html)
@@ -492,9 +540,10 @@ async def scrape(url: str) -> dict[str, Any]:
     resolved = _resolve_video_url(initial_url)
     if resolved:
         fetch_url = resolved
-    elif _EMBED_PAGE_RE.match(initial_url.split("#", 1)[0]):
-        vid = _EMBED_PAGE_RE.match(initial_url.split("#", 1)[0]).group("vid")
-        raise ValueError(f"Embed URLs require a video page slug; got embed id {vid}")
+    elif embed_match := _EMBED_PAGE_RE.match(initial_url.split("#", 1)[0]):
+        raise ValueError(
+            f"Embed URLs require a video page slug; got embed id {embed_match.group('vid')}"
+        )
 
     html = await fetch_page(fetch_url, referer=BASE_SITE)
     canonical = _resolve_video_url(fetch_url) or fetch_url
@@ -518,4 +567,4 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
     except Exception:
         return []
     soup = BeautifulSoup(html, "lxml")
-    return _parse_list_items(soup, limit=limit)
+    return _parse_list_items(soup, limit=limit, page=page)
