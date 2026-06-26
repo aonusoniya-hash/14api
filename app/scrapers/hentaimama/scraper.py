@@ -39,12 +39,13 @@ _SHORTLINK_RE = re.compile(r"/\?p=(\d+)", re.IGNORECASE)
 _IFRAME_SRC_RE = re.compile(r'<iframe[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 _JW_FILE_RE = re.compile(r'file:\s*["\']([^"\']+)["\']', re.IGNORECASE)
 _EPISODE_NUM_RE = re.compile(r"-episode-(\d+)", re.IGNORECASE)
-_PATH_PAGE_SUFFIX_RE = re.compile(r"^(.+)/page/(\d+)$")
-_PATH_NUMERIC_SUFFIX_RE = re.compile(r"^(.+)/(\d+)$")
-_NUMERIC_PAGINATION_ROOTS = frozenset(
-    {"recent-episodes", "hentai-list", "new-monthly-hentai"}
+_PATH_PAGE_SUFFIX_RE = re.compile(r"^(.+)/page/(\d+)$", re.IGNORECASE)
+_PATH_NUMERIC_SUFFIX_RE = re.compile(r"^(.+)/(\d+)$", re.IGNORECASE)
+_PAGE_PAGINATION_ROOTS = frozenset(
+    {"genre", "tvshows", "recent-episodes", "new-monthly-hentai"}
 )
-_PAGE_PAGINATION_ROOTS = frozenset({"genre", "tvshows"})
+_SINGLE_PAGE_ROOTS = frozenset({"hentai-list"})
+_HOMEPAGE_LISTING = "recent-episodes"
 
 
 def can_handle(host: str) -> bool:
@@ -442,6 +443,64 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
             }
         )
 
+    if len(items) < limit:
+        for link in soup.select("a.anm_det_pop[href*='/tvshows/'], a.pop_info[href*='/tvshows/']"):
+            if len(items) >= limit:
+                break
+            url = _normalize_tvshow_href(link.get("href") or "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            title = _clean_title(
+                _first_non_empty(link.get("title"), link.get_text(strip=True))
+            ) or "Unknown Series"
+            items.append(
+                {
+                    "url": url,
+                    "title": title,
+                    "thumbnail_url": None,
+                    "duration": None,
+                    "views": None,
+                    "uploader_name": None,
+                }
+            )
+
+    if len(items) < limit:
+        for link in soup.select(
+            ".content a[href*='/tvshows/'], .content a[href*='/episodes/'], "
+            ".module a[href*='/tvshows/'], .module a[href*='/episodes/']"
+        ):
+            if len(items) >= limit:
+                break
+            href = link.get("href") or ""
+            label = _first_non_empty(link.get("title"), link.get_text(strip=True))
+            if not label:
+                continue
+            if "/episodes/" in href:
+                url = _normalize_episode_href(href)
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                title = _clean_title(label) or "Unknown Episode"
+            elif "/tvshows/" in href:
+                url = _normalize_tvshow_href(href)
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                title = _clean_title(label) or "Unknown Series"
+            else:
+                continue
+            items.append(
+                {
+                    "url": url,
+                    "title": title,
+                    "thumbnail_url": _best_image_url(link.select_one("img")),
+                    "duration": None,
+                    "views": None,
+                    "uploader_name": None,
+                }
+            )
+
     return items[:limit]
 
 
@@ -453,45 +512,46 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     path = (parsed.path or "").strip("/")
     page_num = max(1, int(page) if page else 1)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.pop("page", None)
 
     m_page = _PATH_PAGE_SUFFIX_RE.match(path)
     m_num = _PATH_NUMERIC_SUFFIX_RE.match(path)
     if m_page:
         path = m_page.group(1)
-    elif m_num and m_num.group(1).split("/")[0] in _NUMERIC_PAGINATION_ROOTS:
+    elif m_num and m_num.group(1).split("/")[0] in _SINGLE_PAGE_ROOTS:
         path = m_num.group(1)
 
     parts = path.split("/") if path else []
     root = parts[0] if parts else ""
 
-    if not path or (query.get("s") and root not in _PAGE_PAGINATION_ROOTS):
-        if page_num <= 1:
-            query.pop("page", None)
-        else:
-            query["page"] = str(page_num)
-        new_path = "/" if not path else f"/{path}/"
-        return urlunparse(
-            (
-                parsed.scheme or "https",
-                parsed.netloc or SITE_HOST,
-                new_path,
-                "",
-                urlencode(query),
-                "",
+    if not path:
+        if query.get("s"):
+            new_path = "/"
+            if page_num > 1:
+                query["page"] = str(page_num)
+            return urlunparse(
+                (
+                    parsed.scheme or "https",
+                    parsed.netloc or SITE_HOST,
+                    new_path,
+                    "",
+                    urlencode(query),
+                    "",
+                )
             )
-        )
+        path = _HOMEPAGE_LISTING
+        parts = path.split("/")
+        root = parts[0]
 
-    if root in _PAGE_PAGINATION_ROOTS:
+    if root in _SINGLE_PAGE_ROOTS:
+        new_path = f"/{path}/"
+    elif root in _PAGE_PAGINATION_ROOTS:
         base_path = "/" + "/".join(parts) + "/"
         new_path = base_path if page_num <= 1 else f"{base_path}page/{page_num}/"
-    elif root in _NUMERIC_PAGINATION_ROOTS:
-        new_path = f"/{root}/" if page_num <= 1 else f"/{root}/{page_num}/"
     else:
-        if page_num <= 1:
-            query.pop("page", None)
-        else:
-            query["page"] = str(page_num)
         new_path = f"/{path}/" if path else "/"
+        if page_num > 1:
+            query["page"] = str(page_num)
 
     return urlunparse(
         (

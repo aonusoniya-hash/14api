@@ -2,11 +2,6 @@
   {
     "id": "latest",
     "name": "Latest",
-    "url": "https://hentaimama.io/"
-  },
-  {
-    "id": "recent",
-    "name": "Recent Episodes",
     "url": "https://hentaimama.io/recent-episodes/"
   },
   {
