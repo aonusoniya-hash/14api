@@ -1,0 +1,15 @@
+[
+  { "id": "home", "name": "Home", "url": "https://0511.sp2026.dev/index.php" },
+  { "id": "ori", "name": "91 Original", "url": "https://0511.sp2026.dev/v.php?category=ori&viewtype=basic" },
+  { "id": "hot", "name": "Hot", "url": "https://0511.sp2026.dev/v.php?category=hot&viewtype=basic" },
+  { "id": "top", "name": "Top This Month", "url": "https://0511.sp2026.dev/v.php?category=top&viewtype=basic" },
+  { "id": "long", "name": "10+ Minutes", "url": "https://0511.sp2026.dev/v.php?category=long&viewtype=basic" },
+  { "id": "longer", "name": "20+ Minutes", "url": "https://0511.sp2026.dev/v.php?category=longer&viewtype=basic" },
+  { "id": "tf", "name": "Favorites", "url": "https://0511.sp2026.dev/v.php?category=tf&viewtype=basic" },
+  { "id": "rf", "name": "Featured", "url": "https://0511.sp2026.dev/v.php?category=rf&viewtype=basic" },
+  { "id": "hd", "name": "HD", "url": "https://0511.sp2026.dev/v.php?category=hd&viewtype=basic" },
+  { "id": "top_last", "name": "Top Last Month", "url": "https://0511.sp2026.dev/v.php?category=top&m=-1&viewtype=basic" },
+  { "id": "md", "name": "Most Discussed", "url": "https://0511.sp2026.dev/v.php?category=md&viewtype=basic" },
+  { "id": "mf", "name": "Most Favorited", "url": "https://0511.sp2026.dev/v.php?category=mf&viewtype=basic" },
+  { "id": "watch", "name": "Watch", "url": "https://0511.sp2026.dev/v.php?next=watch" }
+]
