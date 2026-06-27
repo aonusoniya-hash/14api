@@ -32,8 +32,6 @@ _SOURCE_SRC_RE = re.compile(
     r"""<source[^>]+src\s*=\s*["'](?P<url>https?://[^"']+)["']""",
     re.IGNORECASE,
 )
-_MP4_URL_RE = re.compile(r"https?://[^\s\"'<>]+\.mp4(?:\?[^\s\"'<>]*)?", re.IGNORECASE)
-_M3U8_URL_RE = re.compile(r"https?://[^\s\"'<>]+\.m3u8(?:\?[^\s\"'<>]*)?", re.IGNORECASE)
 _VIEWS_RE = re.compile(r"Views:\s*</span>\s*(\d[\d,\s]*)", re.IGNORECASE)
 _FROM_RE = re.compile(r"From:\s*</span>\s*([^<\n]+)", re.IGNORECASE)
 
@@ -218,18 +216,6 @@ def _detect_media_format(url: str) -> Optional[str]:
     return None
 
 
-def _stream_quality_from_url(url: str) -> str:
-    low = (url or "").lower()
-    if "view_video_hd.php" in low:
-        return "hd"
-    match = re.search(r"/(\d{3,4})p\.mp4", low)
-    if match:
-        return f"{match.group(1)}p"
-    if ".m3u8" in low:
-        return "adaptive"
-    return "source"
-
-
 def _extract_source_urls_from_html_fragment(fragment: str) -> list[str]:
     urls: list[str] = []
     for match in _SOURCE_SRC_RE.finditer(fragment):
@@ -247,11 +233,15 @@ def _extract_strencode2_sources(page_html: str) -> list[str]:
     return urls
 
 
+def _strip_html_comments(html: str) -> str:
+    return re.sub(r"<!--[\s\S]*?-->", "", html or "")
+
+
 def _extract_streams(soup: BeautifulSoup, page_html: str, page_url: str) -> dict[str, Any]:
     streams: list[dict[str, str]] = []
     seen: set[str] = set()
 
-    def _add(url: str, *, quality: str | None = None) -> None:
+    def _add(url: str) -> None:
         url = url.replace("\\/", "/").strip()
         if not url or url in seen or _is_blocked_stream_url(url):
             return
@@ -259,46 +249,31 @@ def _extract_streams(soup: BeautifulSoup, page_html: str, page_url: str) -> dict
         if fmt not in ("mp4", "hls"):
             return
         seen.add(url)
-        streams.append(
-            {
-                "url": url,
-                "quality": quality or _stream_quality_from_url(url),
-                "format": fmt,
-            }
-        )
-
-    for source in soup.select("video source[src], source[src]"):
-        _add(str(source.get("src") or ""))
+        streams.append({"url": url, "quality": "source", "format": fmt})
 
     for url in _extract_strencode2_sources(page_html):
         _add(url)
 
-    for pattern in (_MP4_URL_RE, _M3U8_URL_RE):
-        for match in pattern.finditer(page_html.replace("\\/", "/")):
-            _add(match.group(0))
-
-    viewkey = _extract_viewkey(page_url)
-    if viewkey:
-        hd_url = urljoin(_site_origin(page_url), f"view_video_hd.php?viewkey={viewkey}")
-        if hd_url not in seen:
-            seen.add(hd_url)
-            streams.append({"url": hd_url, "quality": "hd", "format": "embed"})
+    if not streams:
+        cleaned_html = _strip_html_comments(page_html)
+        cleaned_soup = BeautifulSoup(cleaned_html, "lxml")
+        for source in cleaned_soup.select("video source[src], source[src]"):
+            _add(str(source.get("src") or ""))
 
     mp4_streams = [s for s in streams if s.get("format") == "mp4"]
     hls_streams = [s for s in streams if s.get("format") == "hls"]
-    embed_streams = [s for s in streams if s.get("format") == "embed"]
 
     default_url = mp4_streams[0]["url"] if mp4_streams else None
     if not default_url and hls_streams:
         default_url = hls_streams[0]["url"]
-    if not default_url and embed_streams:
-        default_url = embed_streams[0]["url"]
+
+    final_streams = mp4_streams[:1] if mp4_streams else hls_streams[:1]
 
     return {
-        "streams": streams,
+        "streams": final_streams,
         "hls": hls_streams[0]["url"] if hls_streams else None,
         "default": default_url,
-        "has_video": bool(streams),
+        "has_video": bool(default_url),
     }
 
 
