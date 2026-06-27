@@ -636,7 +636,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://motherless.com/term/videos/{query}",
         sourceId="motherless",
-        disable=False,
+        disable=True,
         pageSize=60,
     ),
     ExploreSourceResponse(

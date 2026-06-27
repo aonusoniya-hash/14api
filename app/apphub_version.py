@@ -1,11 +1,11 @@
 # AppHub Version Configuration
 # Update this file when you release a new version of AppHub
 
-VERSION = "10.0.0"
-BUILD_NUMBER = 10
+VERSION = "12.0.0"
+BUILD_NUMBER = 12
 # Force all builds older than the current release to update.
 MIN_SUPPORTED_BUILD = BUILD_NUMBER
-RELEASE_DATE = "2026-05-26"
+RELEASE_DATE = "2026-06-28"
 
 # File Information
 DOWNLOAD_URLS = {
@@ -16,8 +16,8 @@ DOWNLOAD_URLS = {
     "universal": ""
 }
 DOWNLOAD_SIZES = {
-    "arm64-v8a": 24000000,
-    "armeabi-v7a": 22000000,
+    "arm64-v8a": 32000000,
+    "armeabi-v7a": 37000000,
     "x86": 23000000,
     "x86_64": 23000000,
     "universal": 40000000
@@ -33,20 +33,17 @@ IS_MANDATORY = False  # If True, prompts an update regardless of MIN_SUPPORTED_B
 TELEGRAM_CHANNEL = "https://t.me/+IDEuHZyD9lc5Y2Jl"
 
 # Changelog Details
-CHANGELOG_TITLE = "🎉 What's New in v10.0.0"
+CHANGELOG_TITLE = "🎉 What's New in v12.0.0"
 CHANGELOG = """
 ✨ Major Features
-• Updated package name and signing key.
-• Fixed security vulnerabilities.
-• Added Google and Email login system.
-• Added 20+ new websites (Total: 64+).
+• Reduced app size.
+• Added 11+ adult website support.
+• Cache set to 1 hour.
+• Removed non-working playlists.
+• Removed storage permission for Android 13+.
 
 🛠️ Bug Fixes & Enhancements
-• Fixed Kamababa, Dasimms2, YouPorn, and XHamster.
+• Fixed m3u8 downloader.
+• Fixed previous bugs.
 • Many more not on the list
-• Due to the new package name and security key, you MUST 
-uninstall the older version from your device
-• If you experience any coin loss while moving away from 
-the local guest login system, please contact us 
-immediately so we can help you recover them.
 """
