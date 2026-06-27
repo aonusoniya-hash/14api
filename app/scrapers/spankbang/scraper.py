@@ -1,64 +1,98 @@
 from __future__ import annotations
 
-import json
-import re
-import os
 import ast
+import json
+import logging
+import os
+import re
 from typing import Any, Optional
 
-from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
+
+from app.core.pool import fetch_html as pool_fetch_html
+
+logger = logging.getLogger(__name__)
+
+BASE_SITE = "https://spankbang.com/"
+_DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": BASE_SITE,
+    "Cookie": "age_verified=1; sb_theme=dark; cookies_accepted=1",
+}
+# SpankBang blocks Chrome TLS fingerprints; Safari impersonation succeeds.
+_CURL_IMPERSONATIONS = ("safari17_0", "safari15_5", "chrome120", "chrome110")
+
 
 def can_handle(host: str) -> bool:
     return "spankbang.com" in host.lower()
+
 
 def get_categories() -> list[dict]:
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         json_path = os.path.join(current_dir, "categories.json")
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
 
-async def fetch_html(url: str) -> str:
-    # Try different impersonations to bypass blocks
-    impersonations = ["chrome120", "chrome110", "safari15_3"]
-    last_error = None
-    
-    for imp in impersonations:
-        try:
-            async with AsyncSession(
-                impersonate=imp,
-                headers={
-                    "Referer": "https://spankbang.com/",
-                    "Cookie": "age_verified=1; sb_theme=dark",
-                },
-                timeout=20.0
-            ) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    return resp.text
-                if resp.status_code == 403:
-                    last_error = f"403 Forbidden with {imp}"
-                    continue
-                resp.raise_for_status()
-                return resp.text
-        except Exception as e:
-            last_error = f"{imp} error: {e}"
-            continue
 
-    print(f"⚠️ SpankBang all curl_cffi attempts failed. Last error: {last_error}. Falling back to httpx...")
-    # Fallback to httpx if curl_cffi fails
-    from app.core import pool
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Cookie": "age_verified=1; sb_theme=dark",
-    }
-    resp = await pool.client.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.text
+def _is_cloudflare_challenge(html: str) -> bool:
+    if not html or len(html) < 500:
+        return True
+    low = html.lower()
+    if "just a moment" in low and "cloudflare" in low:
+        return True
+    if "cf_chl_opt" in low:
+        return True
+    if "checking your browser" in low:
+        return True
+    if "enable javascript and cookies" in low:
+        return True
+    return False
+
+
+async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str | None:
+    try:
+        from curl_cffi.requests import AsyncSession
+    except ImportError:
+        return None
+
+    headers = dict(_DEFAULT_HEADERS)
+    if referer:
+        headers["Referer"] = referer
+
+    for imp in _CURL_IMPERSONATIONS:
+        try:
+            async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    continue
+                text = resp.text
+                if _is_cloudflare_challenge(text):
+                    continue
+                return text
+        except Exception:
+            continue
+    return None
+
+
+async def fetch_html(url: str) -> str:
+    text = await _fetch_with_curl_cffi(url, referer=BASE_SITE)
+    if text:
+        return text
+
+    logger.warning("SpankBang curl_cffi fetch failed for %s, falling back to pool", url)
+    headers = dict(_DEFAULT_HEADERS)
+    html = await pool_fetch_html(url, headers=headers)
+    if _is_cloudflare_challenge(html):
+        raise ValueError(f"Blocked by challenge page: {url}")
+    return html
 
 
 def _extract_video_streams(html: str) -> dict[str, Any]:
@@ -110,22 +144,27 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
                     continue
                     
                 # Clean key names (e.g. m3u8_1080p -> 1080p)
-                clean_q = q.replace('m3u8_', '').replace('p', '')
+                clean_q = q.replace("m3u8_", "")
+                if clean_q.endswith("p") and clean_q[:-1].isdigit():
+                    clean_q = clean_q[:-1]
                 
                 url = None
                 if isinstance(urls, list) and len(urls) > 0:
                     url = urls[0]
                 elif isinstance(urls, str):
                     url = urls
-                    
+
                 if url:
-                    url = url.replace('\\/', '/')
+                    url = url.replace("\\/", "/")
+
+                if url and url not in seen_urls:
                     fmt = "hls" if ".m3u8" in url else "mp4"
                     streams.append({
                         "quality": clean_q,
                         "url": url,
                         "format": fmt
                     })
+                    seen_urls.add(url)
 
         except Exception as e:
             pass
