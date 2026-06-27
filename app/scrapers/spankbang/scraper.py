@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import json
 import logging
 import os
@@ -8,8 +9,6 @@ import re
 from typing import Any, Optional
 
 from bs4 import BeautifulSoup
-
-from app.core.pool import fetch_html as pool_fetch_html
 
 logger = logging.getLogger(__name__)
 
@@ -57,42 +56,39 @@ def _is_cloudflare_challenge(html: str) -> bool:
     return False
 
 
-async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str | None:
-    try:
-        from curl_cffi.requests import AsyncSession
-    except ImportError:
-        return None
+async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
+    from curl_cffi.requests import Session
 
     headers = dict(_DEFAULT_HEADERS)
     if referer:
         headers["Referer"] = referer
 
-    for imp in _CURL_IMPERSONATIONS:
-        try:
-            async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
-                resp = await client.get(url)
+    last_error: str | None = None
+
+    def _do_request() -> str:
+        nonlocal last_error
+        for imp in _CURL_IMPERSONATIONS:
+            try:
+                with Session(impersonate=imp, headers=headers) as session:
+                    resp = session.get(url, timeout=45.0)
                 if resp.status_code != 200:
+                    last_error = f"{imp}: HTTP {resp.status_code}"
                     continue
                 text = resp.text
                 if _is_cloudflare_challenge(text):
+                    last_error = f"{imp}: challenge page"
                     continue
                 return text
-        except Exception:
-            continue
-    return None
+            except Exception as exc:
+                last_error = f"{imp}: {exc}"
+                continue
+        raise ValueError(f"Failed to fetch {url} ({last_error or 'unknown error'})")
+
+    return await asyncio.to_thread(_do_request)
 
 
 async def fetch_html(url: str) -> str:
-    text = await _fetch_with_curl_cffi(url, referer=BASE_SITE)
-    if text:
-        return text
-
-    logger.warning("SpankBang curl_cffi fetch failed for %s, falling back to pool", url)
-    headers = dict(_DEFAULT_HEADERS)
-    html = await pool_fetch_html(url, headers=headers)
-    if _is_cloudflare_challenge(html):
-        raise ValueError(f"Blocked by challenge page: {url}")
-    return html
+    return await _fetch_with_curl_cffi(url, referer=BASE_SITE)
 
 
 def _extract_video_streams(html: str) -> dict[str, Any]:
