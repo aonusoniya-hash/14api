@@ -941,7 +941,7 @@ EXPLORE_SOURCES = [
     ExploreSourceResponse(
         baseUrl="https://hentaihaven.xxx/",
         nickname="Hentai Haven",
-        favicon="https://hentaihaven.xxx/favicon.ico",
+        favicon="https://img.hentaihaven.xxx/theme/hh/Hentai-Haven-Logo.png",
         accentColor="#E91E63",
         category="hentai",
         isVerified=False,
