@@ -398,6 +398,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "blackporn24.com" in parsed_url.netloc.lower() or
         "lesbianporn8.net" in parsed_url.netloc.lower() or
         "leslez.com" in parsed_url.netloc.lower() or
+        "ahvcdn.com" in parsed_url.netloc.lower() or
+        "ahcdn.com" in parsed_url.netloc.lower() or
         "milfporn8.net" in parsed_url.netloc.lower() or
         "indianporn365.xyz" in parsed_url.netloc.lower() or
         "mmsbro.com" in parsed_url.netloc.lower() or
@@ -503,6 +505,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "blackporn24.com" in host_l
             or "lesbianporn8.net" in host_l
             or "leslez.com" in host_l
+            or "ahvcdn.com" in host_l
+            or "ahcdn.com" in host_l
             or "milfporn8.net" in host_l
             or "indianporn365.xyz" in host_l
             or "mmsbro.com" in host_l

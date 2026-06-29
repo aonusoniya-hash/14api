@@ -153,9 +153,9 @@ def _detect_media_format(url: str) -> Optional[str]:
     path = urlparse(url).path.lower() if url else ""
     if "/get_file/" in low:
         return "mp4"
-    if path.endswith(".m3u8") or "mpegurl" in low:
+    if path.endswith(".m3u8") or "mpegurl" in low or "/media=hls/" in low:
         return "hls"
-    if "vcdn" in low:
+    if any(host in low for host in ("vcdn", "ahvcdn.com", "ahcdn.com", "icdn")):
         return "hls"
     if path.endswith(".mp4"):
         return "mp4"
@@ -189,7 +189,7 @@ def _extract_inline_urls(html: str) -> list[str]:
         u = m.group(0).strip()
         if u and _detect_media_format(u):
             urls.append(u)
-    for m in re.finditer(r"/get_file/[^\s\"'<>]+", unescaped, flags=re.IGNORECASE):
+    for m in re.finditer(r"/get_file[^\s\"'<>]*", unescaped, flags=re.IGNORECASE):
         urls.append(urljoin(BASE_SITE, m.group(0).strip()))
     return list(dict.fromkeys(urls))
 
@@ -263,11 +263,6 @@ def _extract_streams(soup: BeautifulSoup, html: str, page_url: str) -> dict[str,
         streams.append({"url": src, "quality": _stream_quality_from_url(src), "format": fmt})
 
     video_id = _extract_video_id(page_url)
-    if video_id:
-        embed_url = f"https://{SITE_HOST}/embed/{video_id}/"
-        if embed_url not in seen:
-            seen.add(embed_url)
-            streams.append({"url": embed_url, "quality": "leslez", "format": "embed"})
 
     def _score(item: dict[str, str]) -> tuple[int, int]:
         fmt = (item.get("format") or "").lower()
@@ -284,8 +279,14 @@ def _extract_streams(soup: BeautifulSoup, html: str, page_url: str) -> dict[str,
     materialized = [json.loads(s) for s in uniq]
     materialized.sort(key=_score, reverse=True)
 
+    has_playable = any(s.get("format") in ("mp4", "hls") for s in materialized)
+    if video_id and not has_playable:
+        embed_url = f"https://{SITE_HOST}/embed/{video_id}/"
+        if embed_url not in seen:
+            materialized.append({"url": embed_url, "quality": "leslez", "format": "embed"})
+
     default_url = None
-    for preferred in ("mp4", "hls", "embed"):
+    for preferred in ("hls", "mp4", "embed"):
         match = next((s for s in materialized if s.get("format") == preferred), None)
         if match:
             default_url = match.get("url")
@@ -301,7 +302,7 @@ def _extract_streams(soup: BeautifulSoup, html: str, page_url: str) -> dict[str,
 
 
 async def _get_file_to_remote_playable(get_file_url: str, *, referer: str) -> Optional[str]:
-    base = get_file_url.split("?", 1)[0].strip().rstrip("/")
+    raw = get_file_url.strip()
     ref = referer.strip() if referer.strip().startswith("http") else BASE_SITE
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -309,6 +310,13 @@ async def _get_file_to_remote_playable(get_file_url: str, *, referer: str) -> Op
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
     }
+
+    parsed = urlparse(raw)
+    if parsed.query and ("f=" in parsed.query or "custom=" in parsed.query):
+        candidate_urls = [raw, raw.rstrip("/") + "/"]
+    else:
+        base = raw.split("?", 1)[0].strip().rstrip("/")
+        candidate_urls = [f"{base}/", base, raw, raw.rstrip("/") + "/"]
 
     async def _attempt(url: str, method: str, range_hdr: Optional[str]) -> Optional[str]:
         h = dict(headers)
@@ -323,6 +331,8 @@ async def _get_file_to_remote_playable(get_file_url: str, *, referer: str) -> Op
             loc = resp.headers.get("Location")
             if not loc:
                 return None
+            if loc.startswith("/"):
+                loc = urljoin(raw, loc)
             if _is_non_video_asset_url(loc) or _is_probable_ad_iframe(loc):
                 return None
             fmt = _detect_media_format(loc)
@@ -330,14 +340,15 @@ async def _get_file_to_remote_playable(get_file_url: str, *, referer: str) -> Op
                 return loc
         return None
 
-    attempts = [
-        (f"{base}/", "HEAD", None),
-        (f"{base}/", "GET", "bytes=0-"),
-        (f"{base}/", "GET", "bytes=0-0"),
-        (base, "HEAD", None),
-        (base, "GET", "bytes=0-"),
-        (base, "GET", "bytes=0-0"),
-    ]
+    attempts: list[tuple[str, str, Optional[str]]] = []
+    for candidate in candidate_urls:
+        attempts.extend(
+            [
+                (candidate, "HEAD", None),
+                (candidate, "GET", "bytes=0-"),
+                (candidate, "GET", "bytes=0-0"),
+            ]
+        )
     for u, method, rng in attempts:
         try:
             resolved = await asyncio.wait_for(_attempt(u, method, rng), timeout=16.0)
@@ -353,7 +364,21 @@ def _extract_video_id(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _extract_media_token(url: str) -> Optional[str]:
+    if not url:
+        return None
+    m = re.search(r"[?&]f=([^&\"']+)", url)
+    if not m:
+        return None
+    token = m.group(1).strip().rstrip("/")
+    if token.endswith(".mp4"):
+        token = token[:-4]
+    return token or None
+
+
 def _url_contains_video_id(url: str, video_id: str) -> bool:
+    if not video_id:
+        return True
     low = (url or "").lower()
     vid = str(video_id).lower()
     return (
@@ -364,6 +389,18 @@ def _url_contains_video_id(url: str, video_id: str) -> bool:
         or f"{vid}.mp4" in low
         or f"/{vid}__" in low
     )
+
+
+def _url_matches_resolved_stream(source_url: str, resolved_url: str, video_id: Optional[str]) -> bool:
+    if _url_contains_video_id(resolved_url, video_id or ""):
+        return True
+    low = resolved_url.lower()
+    if any(host in low for host in ("ahvcdn.com", "ahcdn.com", "vcdn", ".leslez.com")):
+        token = _extract_media_token(source_url)
+        if token and token.lower() in low:
+            return True
+        return bool(video_id is None)
+    return False
 
 
 async def _resolve_video_streams_to_remote_playable(video: dict[str, Any], *, referer: str) -> None:
@@ -380,7 +417,7 @@ async def _resolve_video_streams_to_remote_playable(video: dict[str, Any], *, re
     resolved_pairs = await asyncio.gather(*[_resolve_one(s) for s in get_file_mp4])
     for stream, resolved in resolved_pairs:
         if resolved:
-            if video_id and not _url_contains_video_id(resolved, video_id):
+            if video_id and not _url_matches_resolved_stream(stream["url"], resolved, video_id):
                 streams.remove(stream)
                 continue
             stream["url"] = resolved
@@ -389,6 +426,10 @@ async def _resolve_video_streams_to_remote_playable(video: dict[str, Any], *, re
                 stream["quality"] = _stream_quality_from_url(resolved)
         else:
             streams.remove(stream)
+
+    has_hls = any(x.get("format") == "hls" for x in streams)
+    if has_hls:
+        streams[:] = [s for s in streams if s.get("format") != "embed"]
 
     direct_mp4 = [s for s in streams if s.get("format") == "mp4" and "get_file" not in (s.get("url") or "")]
     hls = next((s for s in streams if s.get("format") == "hls"), None)
