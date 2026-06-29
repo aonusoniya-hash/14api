@@ -50,6 +50,7 @@ from . import viralkand
 from . import blowjobspro
 from . import blackporn24
 from . import lesbianporn8
+from . import leslez
 from . import milfporn8
 from . import indianporn365
 from . import mmsbro
@@ -92,4 +93,4 @@ from . import justporn
 from . import porngo
 from . import porn91
 
-__all__ = ['xnxx', 'xhamster', 'xvideos', 'masa49', 'pornhub', 'youporn', 'redtube', 'beeg', 'spankbang', 'fapnut', 'pornxp', 'hqporner', 'xxxparodyhd', 'pornwex', 'tube8', 'pornhat', 'brazzpw', 'gosexpod', 'watcherotic', 'rule34video', 'haho', 'hanime', 'hentaihaven', 'animeidhentai', 'hentaicity', 'hentaimama', 'rouvideo', 'cg51', 'oppai', 'xmoviesforyou', 'tnaflix', 'hornysimp', 'pimpbunny', 'hentaiser', 'bollywoodmaal', 'viralkand', 'blowjobspro', 'blackporn24', 'lesbianporn8', 'milfporn8', 'indianporn365', 'mmsbro', 'kamababa', 'desimms2', 'desiporn', 'thotsporn', 'leakedamateurporn', 'zeenite', 'uncutmaza', 'mydesimms', 'po85', 'cosxplay', 'memojav', 'hohoj', 'ggjav', 'porn87', 'goodav', 'kanav', 'missav', 'jable', 'tianmei', 'bindasmood', 'eporner', 'dotmaal', 'uncutmasti', 'zmaal', 'ulluwebseries', 'desithothub', 'motherless', 'youjizz', 'pornone', 'threemovs', 'porndig', 'txxx', 'okxxx', 'pornhoarder', 'yesporn', 'justporn', 'porngo', 'porn91']
+__all__ = ['xnxx', 'xhamster', 'xvideos', 'masa49', 'pornhub', 'youporn', 'redtube', 'beeg', 'spankbang', 'fapnut', 'pornxp', 'hqporner', 'xxxparodyhd', 'pornwex', 'tube8', 'pornhat', 'brazzpw', 'gosexpod', 'watcherotic', 'rule34video', 'haho', 'hanime', 'hentaihaven', 'animeidhentai', 'hentaicity', 'hentaimama', 'rouvideo', 'cg51', 'oppai', 'xmoviesforyou', 'tnaflix', 'hornysimp', 'pimpbunny', 'hentaiser', 'bollywoodmaal', 'viralkand', 'blowjobspro', 'blackporn24', 'lesbianporn8', 'leslez', 'milfporn8', 'indianporn365', 'mmsbro', 'kamababa', 'desimms2', 'desiporn', 'thotsporn', 'leakedamateurporn', 'zeenite', 'uncutmaza', 'mydesimms', 'po85', 'cosxplay', 'memojav', 'hohoj', 'ggjav', 'porn87', 'goodav', 'kanav', 'missav', 'jable', 'tianmei', 'bindasmood', 'eporner', 'dotmaal', 'uncutmasti', 'zmaal', 'ulluwebseries', 'desithothub', 'motherless', 'youjizz', 'pornone', 'threemovs', 'porndig', 'txxx', 'okxxx', 'pornhoarder', 'yesporn', 'justporn', 'porngo', 'porn91']

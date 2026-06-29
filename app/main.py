@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -168,6 +168,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if blowjobspro.can_handle(host): return await blowjobspro.scrape(url)
     if blackporn24.can_handle(host): return await blackporn24.scrape(url)
     if lesbianporn8.can_handle(host): return await lesbianporn8.scrape(url)
+    if leslez.can_handle(host): return await leslez.scrape(url)
     if milfporn8.can_handle(host): return await milfporn8.scrape(url)
     if indianporn365.can_handle(host): return await indianporn365.scrape(url)
     if mmsbro.can_handle(host): return await mmsbro.scrape(url)
@@ -251,6 +252,7 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if blowjobspro.can_handle(host): return await blowjobspro.list_videos(base_url=base_url, page=page, limit=limit)
     if blackporn24.can_handle(host): return await blackporn24.list_videos(base_url=base_url, page=page, limit=limit)
     if lesbianporn8.can_handle(host): return await lesbianporn8.list_videos(base_url=base_url, page=page, limit=limit)
+    if leslez.can_handle(host): return await leslez.list_videos(base_url=base_url, page=page, limit=limit)
     if milfporn8.can_handle(host): return await milfporn8.list_videos(base_url=base_url, page=page, limit=limit)
     if indianporn365.can_handle(host): return await indianporn365.list_videos(base_url=base_url, page=page, limit=limit)
     if mmsbro.can_handle(host): return await mmsbro.list_videos(base_url=base_url, page=page, limit=limit)
@@ -472,6 +474,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s == "blowjobspro" or s == "blowjobs": return [_category_item(c) for c in blowjobspro.get_categories()]
         if s == "blackporn24" or s == "blackporn": return [_category_item(c) for c in blackporn24.get_categories()]
         if s == "lesbianporn8" or s == "lesbianporn": return [_category_item(c) for c in lesbianporn8.get_categories()]
+        if s == "leslez" or s == "leslezcom": return [_category_item(c) for c in leslez.get_categories()]
         if s == "milfporn8" or s == "milf8" or s == "milfporn": return [_category_item(c) for c in milfporn8.get_categories()]
         if s == "indianporn365" or s == "indianporn": return [_category_item(c) for c in indianporn365.get_categories()]
         if s == "mmsbro": return [_category_item(c) for c in mmsbro.get_categories()]
