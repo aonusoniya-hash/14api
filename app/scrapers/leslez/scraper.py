@@ -450,12 +450,13 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
 
     duration_el = soup.select_one("[data-duration]")
     duration_text = duration_el.get("data-duration") if duration_el else None
+    title_el = soup.select_one("h1")
 
     title = _clean_title(
         _first_non_empty(
             _meta(soup, prop="og:title"),
             _meta(soup, name="twitter:title"),
-            soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else None,
+            title_el.get_text(" ", strip=True) if title_el else None,
             soup.title.get_text(strip=True) if soup.title else None,
         )
     ) or "Unknown Video"
