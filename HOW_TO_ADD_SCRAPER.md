@@ -3821,3 +3821,73 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hstream"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hstream.moe/hentai/heart-mark-oome-1"
 ```
+
+## Anibd (anibd.app) Implementation Notes
+
+[Anibd](https://anibd.app/) is a WordPress anime streaming site backed by `eng.animeapps.top` and `epeng.animeapps.top` APIs. Series pages use `/up/{postid}/`. Episode playback uses `/up/{postid}/watch/?server={id}&slug={slug}`.
+
+### Host aliases
+
+- `anibd.app`
+- `www.anibd.app`
+- API/CDN hosts: `eng.animeapps.top`, `epeng.animeapps.top`, `playeng.animeapps.top`, `imganibd.ims2.top`, `rez1.ims1.top`, `*.ims1.top`, `*.ims2.top`, `*.1imgdarr.top`
+
+### Listing and pagination (`list_videos`)
+
+- Home / latest: `https://anibd.app/` → `GET https://eng.animeapps.top/api/singlefilter.php?page={n}&limit={limit}`
+- Filter page: `https://anibd.app/filter/?fo=22258&pg=2`
+  - `fo` → `postseasontypetagid`
+  - `ty` → `anitypestagid`
+  - `ge` → `postanigenrestagid`
+  - `ye` → `postyeartagid`
+  - `pg` → page (only when page arg is 1)
+- Search: `https://anibd.app/?s={query}` → `GET https://eng.animeapps.top/api/search3.php?keyword={query}&page={n}&limit={limit}`
+
+List items map to `https://anibd.app/up/{postid}/` with title/thumbnail from API rows.
+
+### Metadata and streams (`scrape`)
+
+1. `GET https://eng.animeapps.top/api/single.php?postid={id}` → metadata (`postname`, `anilist`, covers, genres, description)
+2. `GET https://epeng.animeapps.top/api2.php?epid={anilist}` → servers and episode slugs
+3. Pick episode from URL `server`/`slug` query params, or first episode of first server
+4. `GET https://epeng.animeapps.top/apilink.php?data={episode.link}` → player embed URLs (`playeng.animeapps.top/.../play2.php`)
+5. Fetch each embed page and parse `videoUrl: "/.../index.m3u8"` from inline player config
+6. Resolve to absolute HLS URL on `playeng.animeapps.top`
+
+Send `Referer: https://anibd.app/up/{postid}/watch/?server=...&slug=...` when accessing player/CDN URLs.
+
+### Categories (`get_categories`)
+
+Home, Bluray Uncensored, ani16+, Movie, Filter, and Top Anime feeds in `categories.json`.
+
+### Registration checklist for Anibd
+
+Package folder: `backend/app/scrapers/anibd/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="anibd"`)
+
+### Anibd verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://anibd.app/up/407121/\"}"
+
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://anibd.app/up/407121/watch/?server=10&slug=01\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://anibd.app/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://anibd.app/filter/?fo=22258&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=anibd"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://anibd.app/up/407121/watch/?server=10&slug=01"
+```

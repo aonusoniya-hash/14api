@@ -48,7 +48,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
     from app.api.endpoints import thumbnails
     from urllib.parse import urlparse
     
@@ -118,6 +118,8 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = hentaverse
     elif hstream.can_handle(host):
         scraper_module = hstream
+    elif anibd.can_handle(host):
+        scraper_module = anibd
     elif rouvideo.can_handle(host):
         scraper_module = rouvideo
     elif cg51.can_handle(host):
@@ -407,6 +409,11 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "musume-h.xyz" in parsed_url.netloc.lower() or
         "rorikon-h.xyz" in parsed_url.netloc.lower() or
         "shoujo-h.org" in parsed_url.netloc.lower() or
+        "anibd.app" in parsed_url.netloc.lower() or
+        "animeapps.top" in parsed_url.netloc.lower() or
+        "ims1.top" in parsed_url.netloc.lower() or
+        "ims2.top" in parsed_url.netloc.lower() or
+        "1imgdarr.top" in parsed_url.netloc.lower() or
         "gdvid.info" in parsed_url.netloc.lower() or
         "javprovider.com" in parsed_url.netloc.lower() or
         "bollywoodmaal.com" in parsed_url.netloc.lower() or
@@ -525,6 +532,11 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "musume-h.xyz" in host_l
             or "rorikon-h.xyz" in host_l
             or "shoujo-h.org" in host_l
+            or "anibd.app" in host_l
+            or "animeapps.top" in host_l
+            or "ims1.top" in host_l
+            or "ims2.top" in host_l
+            or "1imgdarr.top" in host_l
             or "gdvid.info" in host_l
             or "javprovider.com" in host_l
             or "bollywoodmaal.com" in host_l
