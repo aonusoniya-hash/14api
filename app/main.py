@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -155,6 +155,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if animeidhentai.can_handle(host): return await animeidhentai.scrape(url)
     if hentaicity.can_handle(host): return await hentaicity.scrape(url)
     if hentaimama.can_handle(host): return await hentaimama.scrape(url)
+    if hentaiocean.can_handle(host): return await hentaiocean.scrape(url)
     if rouvideo.can_handle(host): return await rouvideo.scrape(url)
     if cg51.can_handle(host): return await cg51.scrape(url)
     if oppai.can_handle(host): return await oppai.scrape(url)
@@ -239,6 +240,7 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if animeidhentai.can_handle(host): return await animeidhentai.list_videos(base_url=base_url, page=page, limit=limit)
     if hentaicity.can_handle(host): return await hentaicity.list_videos(base_url=base_url, page=page, limit=limit)
     if hentaimama.can_handle(host): return await hentaimama.list_videos(base_url=base_url, page=page, limit=limit)
+    if hentaiocean.can_handle(host): return await hentaiocean.list_videos(base_url=base_url, page=page, limit=limit)
     if rouvideo.can_handle(host): return await rouvideo.list_videos(base_url=base_url, page=page, limit=limit)
     if cg51.can_handle(host): return await cg51.list_videos(base_url=base_url, page=page, limit=limit)
     if oppai.can_handle(host): return await oppai.list_videos(base_url=base_url, page=page, limit=limit)
@@ -461,6 +463,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s in ("animeidhentai", "animeidhentai.com", "animeid"): return [_category_item(c) for c in animeidhentai.get_categories()]
         if s in ("hentaicity", "hentaicity.com", "hcity"): return [_category_item(c) for c in hentaicity.get_categories()]
         if s in ("hentaimama", "hentaimama.io", "hmama"): return [_category_item(c) for c in hentaimama.get_categories()]
+        if s in ("hentaiocean", "hentaiocean.com", "hocean"): return [_category_item(c) for c in hentaiocean.get_categories()]
         if s == "rouvideo": return [_category_item(c) for c in rouvideo.get_categories()]
         if s == "cg51" or s == "51cg": return [_category_item(c) for c in cg51.get_categories()]
         if s == "oppai": return [_category_item(c) for c in oppai.get_categories()]

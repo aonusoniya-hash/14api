@@ -3589,3 +3589,91 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=pornhoarder"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://ww2.pornhoarder.tw/video/railey-diesel-see-through-chairs-fuck-2024/R0JjSWJjSnYweUJ0bnlSaGlLME5kVnJTL2h5M1dVYm1qOG13ckFQRVRIVT0="
 ```
+
+## Hentai Ocean (hentaiocean.com) Implementation Notes
+
+[Hentai Ocean](https://hentaiocean.com/) is an English-subbed hentai streaming site. Watch URLs use a slug per episode: `https://hentaiocean.com/watch/{slug}` (e.g. `/watch/muchuu-no-tou-1`).
+
+### Host aliases
+
+- `hentaiocean.com`
+- `www.hentaiocean.com`
+- `w1.hentaiocean.com` (VIP/universal player CDN)
+- `w2.hentaiocean.com` (VIP player CDN)
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h in SITE_ALIASES or h.endswith(".hentaiocean.com")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home sections: `/view/recent-releases`, `/view/newly-added`, `/view/random`
+- Genres: `/genre/{Name}` (e.g. `/genre/Milf`, `/genre/Creampie`)
+- Search: `/explore?q={query}`
+- Pagination: `?page={n}` on all list/search URLs (page 1 omits the query param)
+- Parse `a.cell.card[href*='/watch/']` blocks: `img[alt]`, cover from `/assets/optcover/` or `/assets/cover/`
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch.
+
+### Metadata and streams (`scrape`)
+
+Watch pages embed inline `var jsondata = {...}` with:
+
+- `info[]`: `urlname`, `videoname`, `description`, `releasedate`, `uploaddate`, `coverimg`
+- `mirrors[]`: `{mirrorurl}` entries
+- `genres[]`: genre labels
+
+Fallback metadata API (no mirrors): `https://hentaiocean.com/api?action=hentai&slug={slug}`
+
+**Mirror priority** (matches site `mirrorsort()`):
+
+1. VIP: `https://w1|w2.hentaiocean.com/play?vid={filename}`
+2. Universal: `https://w1.hentaiocean.com/universal?vid={filename}`
+3. External embeds: listeamed, vidguard, streamtape, dooodster
+
+**Direct MP4 extraction** for VIP/universal mirrors:
+
+- Stream: `{mirror-host}/video/{urlencoded-vid}`
+- Download: `{mirror-host}/download/{urlencoded-vid}`
+
+Player pages set `videoElement.src = BASE_VIDEO_URL + encodeURIComponent(vid)` where `BASE_VIDEO_URL` is `https://w2.hentaiocean.com/video/` (host derived from mirror URL in the scraper).
+
+Also expose the original `play?vid=` / external URLs as `format: "embed"` streams.
+
+### Categories (`get_categories`)
+
+Recent Releases, Newly Added, Random, and sample genre feeds in `categories.json`.
+
+### Registration checklist for Hentai Ocean
+
+Package folder: `backend/app/scrapers/hentaiocean/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="hentaiocean"`)
+
+### Hentai Ocean verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://hentaiocean.com/watch/muchuu-no-tou-1\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaiocean.com/view/recent-releases&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaiocean.com/genre/Milf&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=hentaiocean"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaiocean.com/watch/muchuu-no-tou-1"
+```
