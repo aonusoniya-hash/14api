@@ -3616,8 +3616,17 @@ def can_handle(host: str) -> bool:
 - Home sections: `/view/recent-releases`, `/view/newly-added`, `/view/random`
 - Genres: `/genre/{Name}` (e.g. `/genre/Milf`, `/genre/Creampie`)
 - Search: `/explore?q={query}`
-- Pagination: `?page={n}` on all list/search URLs (page 1 omits the query param)
-- Parse `a.cell.card[href*='/watch/']` blocks: `img[alt]`, cover from `/assets/optcover/` or `/assets/cover/`
+- Parse `a.cell.card[href*='/watch/']` blocks: `img[alt]`, cover from `/assets/cover/`
+
+**Pagination:** public HTML embeds full feeds and paginates in the browser; `?page={n}` does not change server HTML. `list_videos` should use the public JSON API at `https://hentaiocean.com/api` and slice results locally:
+
+| Feed | API request | Pagination |
+|------|-------------|------------|
+| Recent Releases | `GET ?action=recent` | slice `(page-1)*limit` locally |
+| Newly Added | `GET ?action=new` | slice locally |
+| Random | `GET ?action=random&page={n}` | server-side page param |
+| Explore search | `GET ?action=new` + title/slug/description filter | slice filtered results |
+| Genre / home | HTML parse all cards | slice locally |
 
 Use `curl_cffi` (Chrome impersonation) as primary fetch.
 
