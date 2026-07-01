@@ -21,6 +21,7 @@ SITE_ALIASES = frozenset(
     }
 )
 API_URL = "https://hentaiocean.com/api?action=hentai&slug="
+LIST_API = "https://hentaiocean.com/api"
 
 _DEFAULT_HEADERS = {
     "User-Agent": (
@@ -316,6 +317,95 @@ def _best_image_url(img: Any) -> Optional[str]:
     return None
 
 
+def _list_item_from_api(item: dict[str, Any]) -> dict[str, Any]:
+    slug = str(item.get("urlname") or "").strip()
+    title = _clean_title(_first_non_empty(item.get("videoname"))) or "Unknown Video"
+    return {
+        "url": _canonical_watch_url(slug) if slug else BASE_SITE,
+        "title": title,
+        "thumbnail_url": _cover_url(item.get("coverimg")),
+        "duration": None,
+        "views": None,
+        "uploader_name": "hentaiocean",
+    }
+
+
+def _paginate_items(items: list[dict[str, Any]], page: int, limit: int) -> list[dict[str, Any]]:
+    page_num = max(1, int(page) if page else 1)
+    page_limit = max(1, min(int(limit) if limit else 100, 100))
+    start = (page_num - 1) * page_limit
+    return items[start : start + page_limit]
+
+
+def _filter_api_items(items: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    needle = (query or "").strip().lower()
+    if not needle:
+        return items
+    filtered: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        haystacks = (
+            str(item.get("videoname") or ""),
+            str(item.get("urlname") or ""),
+            str(item.get("description") or ""),
+        )
+        if any(needle in value.lower() for value in haystacks):
+            filtered.append(item)
+    return filtered
+
+
+def _resolve_list_api(base_url: str, page: int) -> tuple[dict[str, str], str] | None:
+    raw = (base_url or "").strip() or DEFAULT_BROWSE_URL
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    parsed = urlparse(raw)
+    path = (parsed.path or "").strip("/")
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    page_num = max(1, int(page) if page else 1)
+
+    if path in ("view/recent-releases",):
+        return {"action": "recent"}, "slice"
+    if path in ("view/newly-added",):
+        return {"action": "new"}, "slice"
+    if path in ("view/random",):
+        return {"action": "random", "page": str(page_num)}, "server"
+    if path == "explore":
+        search_q = _first_non_empty(query.get("q"), query.get("query"))
+        if search_q:
+            return {"action": "new", "_search": search_q}, "slice"
+    return None
+
+
+async def _fetch_list_api(params: dict[str, str], *, referer: str | None = None) -> list[dict[str, Any]]:
+    from curl_cffi import requests as cr
+
+    headers = dict(_DEFAULT_HEADERS)
+    headers["Accept"] = "application/json, text/plain, */*"
+    if referer:
+        headers["Referer"] = referer
+
+    api_params = {k: v for k, v in params.items() if not k.startswith("_")}
+    request_url = f"{LIST_API}?{urlencode(api_params)}" if api_params else LIST_API
+
+    def _do_request() -> list[dict[str, Any]]:
+        for imp in ("chrome120", "chrome110", "safari15_3"):
+            try:
+                resp = cr.get(request_url, headers=headers, impersonate=imp, timeout=45.0)
+                if resp.status_code != 200:
+                    continue
+                payload = resp.json()
+                if isinstance(payload, list):
+                    return [item for item in payload if isinstance(item, dict)]
+                if isinstance(payload, dict) and payload.get("error"):
+                    return []
+            except Exception:
+                continue
+        raise ValueError(f"Failed to fetch API: {request_url}")
+
+    return await asyncio.to_thread(_do_request)
+
+
 def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -355,6 +445,11 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
         if items:
             break
     return items[:limit]
+
+
+def _parse_all_list_items(html: str) -> list[dict[str, Any]]:
+    soup = BeautifulSoup(html, "lxml")
+    return _parse_list_items(soup, limit=10000)
 
 
 def _build_list_page_url(base_url: str, page: int) -> str:
@@ -443,7 +538,8 @@ def parse_video_page(
     )
 
     tags: list[str] = []
-    genres = payload.get("genres") if isinstance(payload.get("genres"), list) else []
+    raw_genres = payload.get("genres")
+    genres: list[Any] = raw_genres if isinstance(raw_genres, list) else []
     for item in genres:
         if isinstance(item, dict):
             tag = _first_non_empty(item.get("genre"), item.get("name"))
@@ -495,20 +591,56 @@ async def scrape(url: str) -> dict[str, Any]:
                     jsondata["info"] = api_payload["info"]
                 if not jsondata.get("genres") and api_payload.get("genres"):
                     jsondata["genres"] = api_payload["genres"]
+                if not jsondata.get("mirrors") and api_payload.get("mirrors"):
+                    jsondata["mirrors"] = api_payload["mirrors"]
         except Exception:
             pass
 
-    mirrors = jsondata.get("mirrors") if isinstance(jsondata.get("mirrors"), list) else []
+    raw_mirrors = jsondata.get("mirrors")
+    mirrors: list[dict[str, Any]] = [
+        mirror
+        for mirror in (raw_mirrors if isinstance(raw_mirrors, list) else [])
+        if isinstance(mirror, dict)
+    ]
     video_data = _streams_from_mirrors(mirrors)
     return parse_video_page(html, page_url, video=video_data, jsondata=jsondata)
 
 
 async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[dict[str, Any]]:
     normalized_base = (base_url or "").strip() or DEFAULT_BROWSE_URL
+    referer = normalized_base if normalized_base.startswith("http") else urljoin(BASE_SITE, normalized_base)
+
+    api_target = _resolve_list_api(normalized_base, page)
+    if api_target:
+        params, mode = api_target
+        try:
+            items = await _fetch_list_api(params, referer=referer)
+            search_q = params.get("_search")
+            if search_q:
+                items = _filter_api_items(items, search_q)
+            if mode == "server":
+                converted = [_list_item_from_api(item) for item in items]
+                return converted[: max(1, min(int(limit) if limit else 100, 100))]
+            converted = [_list_item_from_api(item) for item in items]
+            return _paginate_items(converted, page, limit)
+        except Exception:
+            pass
+
     page_url = _build_list_page_url(normalized_base, page)
     try:
-        html = await fetch_page(page_url, referer=normalized_base or BASE_SITE)
+        html = await fetch_page(page_url, referer=referer or BASE_SITE)
     except Exception:
         return []
-    soup = BeautifulSoup(html, "lxml")
-    return _parse_list_items(soup, limit=limit)
+    items = _parse_all_list_items(html)
+    parsed = urlparse(normalized_base if normalized_base.startswith("http") else urljoin(BASE_SITE, normalized_base))
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    search_q = _first_non_empty(query.get("q"), query.get("query"))
+    if search_q:
+        needle = search_q.lower()
+        items = [
+            item
+            for item in items
+            if needle in str(item.get("title") or "").lower()
+            or needle in str(item.get("url") or "").lower()
+        ]
+    return _paginate_items(items, page, limit)
