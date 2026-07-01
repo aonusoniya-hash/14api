@@ -3751,3 +3751,73 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hentaverse"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaverse.com/video/a-size-classmate-episode-1"
 ```
+
+## hstream.moe Implementation Notes
+
+[hstream.moe](https://hstream.moe/) is a Laravel/Livewire hentai streaming site with English-subbed episodes in HD/4K. Episode watch URLs use `/hentai/{slug}` (e.g. `/hentai/heart-mark-oome-1`). Series hub pages use `/hentai/{series-slug}` without the trailing `-{episode}` suffix.
+
+### Host aliases
+
+- `hstream.moe`
+- `www.hstream.moe`
+- Stream CDN hosts returned by `/player/api` (e.g. `imoto-str.ane-h.xyz`, `oppai-str.shoujo-h.org`, `*.imoto-h.xyz`, `*.musume-h.xyz`, `*.rorikon-h.xyz`)
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://hstream.moe/`
+- Recently uploaded: `https://hstream.moe/search?order=recently-uploaded`
+- Recently released: `https://hstream.moe/search?order=recently-released`
+- Most views: `https://hstream.moe/search?order=view-count`
+- Tag filters: `https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D={tag}` (e.g. `milf`, `uncensored`, `4k-48fps`)
+- Search: `https://hstream.moe/search?q={query}&order=recently-uploaded`
+
+**Pagination:** append `&page={n}` to search/list URLs (page 1 omits the param). Home page cards are embedded in tabs; use search feeds for reliable pagination.
+
+Parse list cards from `div.episode-item a[href*="/hentai/"]` with title in `h3`, thumbnail in `img`, and views from the eye icon row.
+
+### Metadata and streams (`scrape`)
+
+- **Series URL resolution:** `/hentai/{series-slug}` resolves to the first episode link matching `{series-slug}-*`, then scrapes that episode page.
+- **Episode id:** hidden input `#e_id` on episode pages (e.g. `value="2004"`).
+- **Player API:** `POST https://hstream.moe/player/api` with JSON `{"episode_id": "<id>"}`. Requires Laravel CSRF from the page session (`X-XSRF-TOKEN` cookie + `X-CSRF-TOKEN` from meta or Livewire `data-csrf`).
+- **Metadata:** JSON-LD `VideoObject` (`name`, `description`, `thumbnailUrl`, `uploadDate`, `genre`, `interactionStatistic.userInteractionCount` for views), plus Open Graph fallbacks.
+- **Stream payload fields:** `stream_url` (e.g. `2026/Heart.Mark.Oome/E01`), `stream_domains` (CDN base URLs), `interpolated`, `interpolated_uhd`.
+- **Streams:** build from the first CDN domain in `stream_domains`:
+  - Guest MP4: `{cdn}/{stream_url}/x264.720p.mp4`
+  - DASH MPD: `{cdn}/{stream_url}/720/manifest.mpd`, `/1080/manifest.mpd`, `/2160/manifest.mpd`
+  - Optional interpolated: `/1080i/manifest.mpd`, `/2160i/manifest.mpd`
+- Send `Referer: https://hstream.moe/hentai/{slug}` when accessing CDN URLs.
+
+Use a single `httpx.AsyncClient` with cookies for the page fetch and player API POST.
+
+### Categories (`get_categories`)
+
+Home, Recently Uploaded, Recently Released, Most Views, and sample tag feeds in `categories.json`.
+
+### Registration checklist for hstream.moe
+
+Package folder: `backend/app/scrapers/hstream/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="hstream"`)
+
+### hstream.moe verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://hstream.moe/hentai/heart-mark-oome-1\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hstream.moe/search?order=recently-uploaded&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=milf&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=hstream"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hstream.moe/hentai/heart-mark-oome-1"
+```

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "home",
+    "name": "Home",
+    "url": "https://hstream.moe/"
+  },
+  {
+    "id": "recently-uploaded",
+    "name": "Recently Uploaded",
+    "url": "https://hstream.moe/search?order=recently-uploaded"
+  },
+  {
+    "id": "recently-released",
+    "name": "Recently Released",
+    "url": "https://hstream.moe/search?order=recently-released"
+  },
+  {
+    "id": "view-count",
+    "name": "Most Views",
+    "url": "https://hstream.moe/search?order=view-count"
+  },
+  {
+    "id": "uncensored",
+    "name": "Uncensored",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=uncensored"
+  },
+  {
+    "id": "milf",
+    "name": "Milf",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=milf"
+  },
+  {
+    "id": "maid",
+    "name": "Maid",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=maid"
+  },
+  {
+    "id": "school-girl",
+    "name": "School Girl",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=school-girl"
+  },
+  {
+    "id": "succubus",
+    "name": "Succubus",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=succubus"
+  },
+  {
+    "id": "tentacle",
+    "name": "Tentacle",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=tentacle"
+  },
+  {
+    "id": "big-boobs",
+    "name": "Big Boobs",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=big-boobs"
+  },
+  {
+    "id": "bdsm",
+    "name": "BDSM",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=bdsm"
+  },
+  {
+    "id": "elf",
+    "name": "Elf",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=elf"
+  },
+  {
+    "id": "4k-48fps",
+    "name": "4K 48FPS",
+    "url": "https://hstream.moe/search?order=recently-uploaded&tags%5B0%5D=4k-48fps"
+  }
+]
