@@ -48,7 +48,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, porn91
     from app.api.endpoints import thumbnails
     from urllib.parse import urlparse
     
@@ -114,6 +114,8 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = hentaimama
     elif hentaiocean.can_handle(host):
         scraper_module = hentaiocean
+    elif hentaverse.can_handle(host):
+        scraper_module = hentaverse
     elif rouvideo.can_handle(host):
         scraper_module = rouvideo
     elif cg51.can_handle(host):
@@ -395,6 +397,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "hentaiocean.com" in parsed_url.netloc.lower() or
         "w1.hentaiocean.com" in parsed_url.netloc.lower() or
         "w2.hentaiocean.com" in parsed_url.netloc.lower() or
+        "hentaverse.com" in parsed_url.netloc.lower() or
+        "cdn.hentaverse.com" in parsed_url.netloc.lower() or
         "gdvid.info" in parsed_url.netloc.lower() or
         "javprovider.com" in parsed_url.netloc.lower() or
         "bollywoodmaal.com" in parsed_url.netloc.lower() or
@@ -505,6 +509,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "hentaiocean.com" in host_l
             or "w1.hentaiocean.com" in host_l
             or "w2.hentaiocean.com" in host_l
+            or "hentaverse.com" in host_l
+            or "cdn.hentaverse.com" in host_l
             or "gdvid.info" in host_l
             or "javprovider.com" in host_l
             or "bollywoodmaal.com" in host_l

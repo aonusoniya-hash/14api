@@ -3677,3 +3677,68 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hentaiocean"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaiocean.com/watch/muchuu-no-tou-1"
 ```
+
+## Hentaverse (hentaverse.com) Implementation Notes
+
+[Hentaverse](https://hentaverse.com/) is a Next.js hentai streaming site with series and episode pages. Episode watch URLs use `/video/{slug}` (e.g. `/video/a-size-classmate-episode-1`). Series pages use `/hentai/{series-slug}`.
+
+### Host aliases
+
+- `hentaverse.com`
+- `www.hentaverse.com`
+- `cdn.hentaverse.com` (MP4/thumbnail CDN)
+
+### Listing and pagination (`list_videos`)
+
+- Newest: `https://hentaverse.com/newest`
+- Trending: `https://hentaverse.com/trending`
+- Categories: `/categories/{slug}` (e.g. `/categories/ntr`, `/categories/creampie`)
+- Series hub: `/hentai` and home page series cards at `/hentai/{series-slug}`
+- Search: `/search?search_query={query}`
+- Pagination: `?page={n}` (page 1 omits the query param)
+
+List data is embedded in Next.js flight chunks as `"initialVideos":[...]` on feed pages, or episode cards on series pages. Parse slug, title, thumbnail, duration, views, and build watch URLs as `/video/{slug}`.
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch.
+
+### Metadata and streams (`scrape`)
+
+- **Series URL resolution:** `/hentai/{series-slug}` resolves to the first episode from embedded episode cards, then scrapes the watch page.
+- **Metadata:** JSON-LD `VideoObject` (`name`, `description`, `thumbnailUrl`, `uploadDate`, `genre`, `interactionStatistic` for views, `author`)
+- **Stream base path:** `"videoPath":"uploads/videos/{uuid}/renditions"` from flight chunks, or `VideoObject.contentUrl`
+- **Streams:** progressive MP4 renditions on CDN:
+  - `https://cdn.hentaverse.com/uploads/videos/{uuid}/renditions/1080p.mp4`
+  - `720p.mp4`, `480p.mp4`, `360p.mp4`
+- Send `Referer: https://hentaverse.com/video/{slug}` when accessing CDN URLs.
+
+### Categories (`get_categories`)
+
+Newest, Trending, Hentai Series, and sample category feeds in `categories.json`.
+
+### Registration checklist for Hentaverse
+
+Package folder: `backend/app/scrapers/hentaverse/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="hentaverse"`)
+
+### Hentaverse verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://hentaverse.com/video/a-size-classmate-episode-1\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaverse.com/newest&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaverse.com/categories/ntr&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=hentaverse"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaverse.com/video/a-size-classmate-episode-1"
+```
