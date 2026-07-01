@@ -3695,11 +3695,20 @@ curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaiocean.com/wat
 - Categories: `/categories/{slug}` (e.g. `/categories/ntr`, `/categories/creampie`)
 - Series hub: `/hentai` and home page series cards at `/hentai/{series-slug}`
 - Search: `/search?search_query={query}`
-- Pagination: `?page={n}` (page 1 omits the query param)
 
-List data is embedded in Next.js flight chunks as `"initialVideos":[...]` on feed pages, or episode cards on series pages. Parse slug, title, thumbnail, duration, views, and build watch URLs as `/video/{slug}`.
+**Pagination:** the public site HTML only embeds page 1 in Next.js flight data. `list_videos` must call the content API at `https://apiv2.hentaverse.com/api/v1/content` with a `page` query param:
 
-Use `curl_cffi` (Chrome impersonation) as primary fetch.
+| Feed | API request |
+|------|-------------|
+| Newest | `GET /videos?type=newest&page={n}&limit={limit}` |
+| Trending | `GET /videos?sort=trending&page={n}&limit={limit}` |
+| Category | `GET /categories/{slug}?page={n}&limit={limit}` |
+| Search | `GET /search/videos?q={query}&page={n}&limit={limit}` |
+| Home | `GET /videos?sort=trending&page={n}&limit={limit}` |
+
+Responses use `data.items` (feeds/search) or `data.videos` (categories). Fall back to HTML parsing only for `/hentai/{series-slug}` episode grids.
+
+Use `curl_cffi` (Chrome impersonation) with `Origin`/`Referer` headers for API requests.
 
 ### Metadata and streams (`scrape`)
 

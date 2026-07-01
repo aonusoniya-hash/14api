@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 BASE_SITE = "https://hentaverse.com/"
 DEFAULT_BROWSE_URL = "https://hentaverse.com/newest"
 CDN_SITE = "https://cdn.hentaverse.com/"
+CONTENT_API = "https://apiv2.hentaverse.com/api/v1/content"
 SITE_HOST = "hentaverse.com"
 SITE_ALIASES = frozenset(
     {
@@ -449,6 +450,81 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     )
 
 
+def _resolve_list_api(base_url: str, page: int, limit: int) -> tuple[str, dict[str, str]] | None:
+    raw = (base_url or "").strip() or DEFAULT_BROWSE_URL
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    parsed = urlparse(raw)
+    path = (parsed.path or "").strip("/")
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    page_num = max(1, int(page) if page else 1)
+    page_limit = max(1, min(int(limit) if limit else 100, 100))
+    params = {"page": str(page_num), "limit": str(page_limit)}
+
+    if not path:
+        return f"{CONTENT_API}/videos", {**params, "sort": "trending"}
+
+    root = path.split("/")[0].lower()
+    if root == "newest":
+        return f"{CONTENT_API}/videos", {**params, "type": "newest"}
+    if root == "trending":
+        return f"{CONTENT_API}/videos", {**params, "sort": "trending"}
+    if root == "categories" and "/" in path:
+        slug = path.split("/", 1)[1]
+        return f"{CONTENT_API}/categories/{slug}", params
+    if root == "search":
+        search_q = _first_non_empty(query.get("search_query"), query.get("q"))
+        if not search_q:
+            return None
+        return f"{CONTENT_API}/search/videos", {**params, "q": search_q}
+    return None
+
+
+def _videos_from_api_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        for key in ("items", "videos"):
+            items = data.get(key)
+            if isinstance(items, list):
+                return [item for item in items if isinstance(item, dict)]
+    videos = payload.get("videos")
+    if isinstance(videos, list):
+        return [item for item in videos if isinstance(item, dict)]
+    return []
+
+
+async def _fetch_json_api(
+    url: str,
+    params: dict[str, str],
+    *,
+    referer: str | None = None,
+) -> dict[str, Any]:
+    from curl_cffi import requests as cr
+
+    headers = dict(_DEFAULT_HEADERS)
+    headers["Accept"] = "application/json, text/plain, */*"
+    headers["Origin"] = BASE_SITE.rstrip("/")
+    if referer:
+        headers["Referer"] = referer
+
+    query = urlencode(params)
+    request_url = f"{url}?{query}" if query else url
+
+    def _do_request() -> dict[str, Any]:
+        for imp in ("chrome120", "chrome110", "safari15_3"):
+            try:
+                resp = cr.get(request_url, headers=headers, impersonate=imp, timeout=45.0)
+                if resp.status_code != 200:
+                    continue
+                payload = resp.json()
+                return payload if isinstance(payload, dict) else {}
+            except Exception:
+                continue
+        raise ValueError(f"Failed to fetch API: {request_url}")
+
+    return await asyncio.to_thread(_do_request)
+
+
 async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
     from curl_cffi import requests as cr
 
@@ -562,6 +638,21 @@ async def scrape(url: str) -> dict[str, Any]:
 
 async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[dict[str, Any]]:
     normalized_base = (base_url or "").strip() or DEFAULT_BROWSE_URL
+    api_target = _resolve_list_api(normalized_base, page, limit)
+    if api_target:
+        api_url, params = api_target
+        try:
+            payload = await _fetch_json_api(
+                api_url,
+                params,
+                referer=normalized_base if normalized_base.startswith("http") else urljoin(BASE_SITE, normalized_base),
+            )
+            videos = _videos_from_api_payload(payload)
+            if videos:
+                return [_list_item_from_video(video) for video in videos[:limit]]
+        except Exception:
+            pass
+
     page_url = _build_list_page_url(normalized_base, page)
     try:
         html = await fetch_page(page_url, referer=normalized_base or BASE_SITE)
