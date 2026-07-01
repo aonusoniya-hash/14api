@@ -410,12 +410,13 @@ def parse_video_page(
     soup = BeautifulSoup(html, "lxml")
     page_url = url.rstrip("/")
     jsonld = _extract_jsonld_video(html)
+    h1 = soup.select_one("h1")
 
     title = _clean_title(
         _first_non_empty(
             jsonld.get("name"),
             _meta(soup, prop="og:title"),
-            soup.select_one("h1") and soup.select_one("h1").get_text(strip=True),
+            h1.get_text(strip=True) if h1 else None,
             (player_payload or {}).get("title"),
             soup.title.get_text(strip=True) if soup.title else None,
         )
