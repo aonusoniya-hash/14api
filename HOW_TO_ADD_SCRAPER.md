@@ -4052,3 +4052,72 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=thepornbang"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.thepornbang.com/video/en-pointe-pounding_v28/"
 ```
+
+## PornHD3X (pornhd3x) Implementation Notes
+
+[PornHD3X](https://www9.pornhd3x.tv/) is a CMS-based movie site (Brazzers3X family) with slug-based watch URLs, JW Player sources loaded via AJAX, and home/category/search feeds.
+
+### Hosts
+
+- `pornhd3x.tv`, `www.pornhd3x.tv`, `www9.pornhd3x.tv`
+- `pornhd3x.me`, `www.pornhd3x.me`
+- Related mirror domains: `brazzers3x.com`, `brazzers3x.me`
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    if h.startswith("www9."):
+        h = h[5:]
+    return h in SITE_ALIASES or h.endswith(".pornhd3x.tv") or h.endswith(".pornhd3x.me")
+```
+
+### Listing URLs
+
+- Home page 1: `https://www9.pornhd3x.tv/`
+- Home page 2+: `https://www9.pornhd3x.tv/premium-porn-hd/page-{n}`
+- Category: `https://www9.pornhd3x.tv/category/{slug}/`
+- Category page 2+: `https://www9.pornhd3x.tv/category/{slug}/page-{n}`
+- Search: `https://www9.pornhd3x.tv/search/{query}/`
+
+List cards use `.ml-item.item` with `a[href*='/movies/']`, `img[data-original]`, and optional `[data-preview]`.
+
+### Watch page + streams
+
+- **Watch URL shape:** `https://www9.pornhd3x.tv/movies/{slug}/`
+- **Movie id:** inline `var movie = { id: "...", name: "...", ... }`
+- **Stream API:** `GET /ajax/get_sources/{episode_id}/{md5}?count=1&mobile=false`
+  - Requires a session cookie named `{token[13:37]}{episode_id}{token[40:64]}` with a random 6-char value
+  - MD5 token: `md5(episode_id + cookie_value + "98126avrbi6m49vd7shxkn985")`
+  - Response JSON contains JW Player `playlist[].sources[]` with signed HLS/MP4 URLs (often `cdn-aws-exp.cdnamz.me`)
+- **Embed fallback (servers 12–15):** `GET /ajax/load_embed/{episode_id}` → `{ "embed_url": "..." }`
+
+Use `curl_cffi` (Chrome impersonation) with `Referer` set to the movie page.
+
+Package folder: `backend/app/scrapers/pornhd3x/`.
+
+Registration checklist:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `pornhd3x`, `pornhd3x.tv`, `www9.pornhd3x.tv`)
+- `backend/app/services/video_streaming.py`
+- `backend/app/models/schemas.py` (allow `pornhd3x.tv`, `www9.pornhd3x.tv`, `brazzers3x.com`, `cdnamz.me`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="pornhd3x"`)
+- `backend/HOW_TO_ADD_SCRAPER.md`
+
+### Test commands
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www9.pornhd3x.tv/movies/new-deeper-stella-luxx-the-cure-for-loneliness-02-06-2026-anal-hardcore-artporn-bigtits-iluvy-lulustream-com-doodstream-co\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www9.pornhd3x.tv/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www9.pornhd3x.tv/category/brazzers&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=pornhd3x"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www9.pornhd3x.tv/movies/new-deeper-stella-luxx-the-cure-for-loneliness-02-06-2026-anal-hardcore-artporn-bigtits-iluvy-lulustream-com-doodstream-co"
+```
