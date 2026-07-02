@@ -3970,3 +3970,85 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=oneporn"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.1porn.tv/videos/softcore-makeout-turns-hardcore-vaginal-sex-with-luna-bunny/"
 ```
+
+## ThePornBang.com Implementation Notes
+
+[ThePornBang.com](https://www.thepornbang.com/home36/) is a KVS/kt_player tube site with slug-based watch URLs, signed `/get_stream/` MP4 links in inline `flashvars`, and home/category/search feeds.
+
+### Host aliases
+
+- `thepornbang.com`
+- `www.thepornbang.com`
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h == "thepornbang.com" or h.endswith(".thepornbang.com")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://www.thepornbang.com/home36/`
+- Category: `https://www.thepornbang.com/category/{slug}_c{id}/`
+- Search: `https://www.thepornbang.com/search/{query}/`
+
+**Pagination:** append `/{page}/` to the list path (page 1 omits the page segment). Examples:
+
+- Page 2 category: `https://www.thepornbang.com/category/anal_c13/2/`
+- Page 3 search: `https://www.thepornbang.com/search/milf/3/`
+
+Parse cards from `.row.item` with `a.thumb[href*='/video/']`, thumbnail in `img[data-original]`, preview in `img[data-preview]`, duration in `.duration`, views in `.views`.
+
+List section roots include `#list_videos_latest_videos_list_items`, `#list_videos_latest_videos_items`, `#list_videos_most_recent_videos_items`, and related home blocks.
+
+Use `curl_cffi` (Chrome impersonation) with `Referer: https://www.thepornbang.com/home36/`.
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://www.thepornbang.com/video/{slug}_v{id}/`
+- **Embed URL shape:** `https://www.thepornbang.com/embed/{video_id}/`
+- **Metadata:** Open Graph (`og:title`, `og:image`), `h1`, and inline `flashvars` (`video_title`, `video_categories`, `video_tags`, `video_id`)
+- **Streams:** signed progressive MP4 links from `flashvars`:
+  - `video_url` + `video_url_text` (480p)
+  - `video_alt_url` + `video_alt_url_text` (720p)
+  - `video_alt_url2` + `video_alt_url2_text` (1080p)
+  - `video_alt_url3` + `video_alt_url3_text` (2160p)
+  - Example: `https://www.thepornbang.com/get_stream/8897-720.mp4?md5=...&timestamp=...`
+- Deduplicate streams by normalized URL and quality label before returning.
+- Send `Referer: https://www.thepornbang.com/home36/` when accessing `/get_stream/` URLs.
+
+### Categories (`get_categories`)
+
+Home, New, Best, 4K, and sample category feeds in `categories.json`.
+
+### Registration checklist for ThePornBang
+
+Package folder: `backend/app/scrapers/thepornbang/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `thepornbang`, `pornbang`, `thepornbang.com`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="thepornbang"`)
+
+### ThePornBang verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.thepornbang.com/video/en-pointe-pounding_v28/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.thepornbang.com/home36/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.thepornbang.com/category/anal_c13/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=thepornbang"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.thepornbang.com/video/en-pointe-pounding_v28/"
+```
