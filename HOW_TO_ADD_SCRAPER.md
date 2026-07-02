@@ -3891,3 +3891,82 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=anibd"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://anibd.app/up/407121/watch/?server=10&slug=01"
 ```
+
+## 1Porn.TV (oneporn) Implementation Notes
+
+[1Porn.TV](https://www.1porn.tv/) is a KVS-based tube site with slug-based watch URLs, Video.js progressive MP4 sources via signed `/get_file/` links, and JSON-LD metadata. The scraper package folder is `oneporn` because Python module names cannot start with a digit.
+
+### Host aliases
+
+- `1porn.tv`
+- `www.1porn.tv`
+- CDN/thumbnail hosts: `img.1porn.tv`, `cast.1porn.tv`, `fpvcdn.com` (resolved MP4 CDN)
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h == "1porn.tv" or h.endswith(".1porn.tv")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://www.1porn.tv/` → `#list_videos_most_recent_videos_items`
+- Latest: `https://www.1porn.tv/latest-updates/` → `#list_videos_latest_videos_list_items`
+- Categories / top lists: `#list_videos_common_videos_list_items`
+- Search: `https://www.1porn.tv/search/{query}/` → `#custom_list_videos_videos_list_search_result_items`
+
+**Pagination:** append `/{page}/` to the list path (page 1 omits the page segment). Examples:
+
+- Page 2 latest: `https://www.1porn.tv/latest-updates/2/`
+- Page 3 category: `https://www.1porn.tv/categories/anal/3/`
+
+Parse cards from `.item` blocks with `a[href*='/videos/']`, thumbnail in `img`, preview in `.img[data-preview]`, duration in `.duration`.
+
+Use `curl_cffi` (Chrome impersonation) with `Referer: https://www.1porn.tv/` — direct video-page fetches can return Cloudflare 503 without a warm session/referer.
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://www.1porn.tv/videos/{slug}/`
+- **Embed URL shape:** `https://www.1porn.tv/embed/{video_id}` — resolve to the canonical watch URL via inline `flashvars.video_url`
+- **Metadata:** JSON-LD `VideoObject` (`name`, `description`, `thumbnailUrl`, `uploadDate`, `duration` as ISO-8601, `embedUrl`, `interactionStatistic` for views), plus Open Graph fallbacks
+- **Streams:** progressive MP4 `<source>` tags inside `video.video-js`, typically signed:
+  - `https://www.1porn.tv/get_file/{token}/{bucket}/{id}/{id}_2160m.mp4/`
+  - `..._720m.mp4/`, `..._480m.mp4/`
+- Resolve `/get_file/` URLs through redirects before returning stream endpoints (same pattern as `porngo`).
+- Send `Referer: https://www.1porn.tv/` when accessing CDN/get_file URLs.
+
+### Categories (`get_categories`)
+
+Latest, Top Rated, Most Viewed, 4K, and sample category feeds in `categories.json`.
+
+### Registration checklist for 1Porn.TV
+
+Package folder: `backend/app/scrapers/oneporn/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `oneporn`, `1porn`, `1porn.tv`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="oneporn"`)
+
+### 1Porn.TV verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.1porn.tv/videos/softcore-makeout-turns-hardcore-vaginal-sex-with-luna-bunny/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.1porn.tv/latest-updates/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.1porn.tv/categories/anal/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=oneporn"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.1porn.tv/videos/softcore-makeout-turns-hardcore-vaginal-sex-with-luna-bunny/"
+```
