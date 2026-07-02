@@ -4121,3 +4121,72 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=pornhd3x"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www9.pornhd3x.tv/movies/new-deeper-stella-luxx-the-cure-for-loneliness-02-06-2026-anal-hardcore-artporn-bigtits-iluvy-lulustream-com-doodstream-co"
 ```
+
+## JavFun.me (javfun) Implementation Notes
+
+[JavFun.me](https://en.javfun.me/) is a JavHub-family CMS site with slug-based watch URLs, JW Player HLS via `/ajax/get_sources/`, and studio/category/search feeds.
+
+### Hosts
+
+- `javfun.me`, `en.javfun.me`, `www.javfun.me`
+- Media/thumbnails may also reference `javhub.me`
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    if h.startswith("en."):
+        h = h[3:]
+    return h in SITE_ALIASES or h.endswith(".javfun.me")
+```
+
+### Listing URLs
+
+- Home page 1: `https://en.javfun.me/`
+- Home page 2+: `https://en.javfun.me/japanese-porn-videos/page-{n}`
+- All movies: `https://en.javfun.me/japanese-porn-videos`
+- Studio: `https://en.javfun.me/studio/{slug}/`
+- Category: `https://en.javfun.me/category/{slug}/`
+- Search: `https://en.javfun.me/search/{query}/`
+- Pagination: append `/page-{n}` to the browse path
+
+List cards use `div.ml-item[data-movie-id]` with `a.ml-mask[href*='/movies/']`, `img.mli-thumb[data-original]`.
+
+### Watch page + streams
+
+- **Watch URL shape:** `https://en.javfun.me/movies/{slug}` (no trailing slash — trailing slash redirects to junk)
+- **Episode ID:** `a.btn-eps[episode-id]` or inline `var movie = { id: "..." }`
+- **Stream API:** `GET /ajax/get_sources/{episode_id}/{md5}?count=1&mobile=0`
+  - MD5: `md5(episode_id + random6 + "9826avrbi6m49vd7shxkn9815")`
+  - Response: JW Player `playlist[].sources[]` with HLS on `*.gogocdnaws-2.online`
+- **Embed fallback:** `GET /ajax/load_embed/{episode_id}`
+
+Use `curl_cffi` with `Referer` set to the movie page. Prefer `#mv-info h3` over `og:title` (often `"Loading..."`).
+
+Package folder: `backend/app/scrapers/javfun/`.
+
+Registration checklist:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `javfun`, `javfun.me`, `en.javfun.me`)
+- `backend/app/services/video_streaming.py`
+- `backend/app/models/schemas.py` (allow `javfun.me`, `en.javfun.me`, `gogocdnaws-2.online`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="javfun"`)
+- `backend/HOW_TO_ADD_SCRAPER.md`
+
+### Test commands
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://en.javfun.me/movies/asiansexdiary-boat-trip-and-jennifer\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://en.javfun.me/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://en.javfun.me/studio/caribbeancom&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=javfun"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://en.javfun.me/movies/asiansexdiary-boat-trip-and-jennifer"
+```
