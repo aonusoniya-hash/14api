@@ -805,7 +805,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://www.thepornbang.com/search/{query}/",
         sourceId="thepornbang",
-        disable=False,
+        disable=True,
         pageSize=24,
     ),
     ExploreSourceResponse(
