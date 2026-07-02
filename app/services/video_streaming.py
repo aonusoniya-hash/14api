@@ -48,7 +48,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, porn91
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
     from app.api.endpoints import thumbnails
     from urllib.parse import urlparse
     
@@ -236,6 +236,10 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = pornhd3x
     elif javfun.can_handle(host):
         scraper_module = javfun
+    elif pornhd4k.can_handle(host):
+        scraper_module = pornhd4k
+    elif pornhouse.can_handle(host):
+        scraper_module = pornhouse
     elif porn91.can_handle(host):
         scraper_module = porn91
     else:
@@ -507,6 +511,10 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "cdnamz.me" in parsed_url.netloc.lower() or
         "javfun.me" in parsed_url.netloc.lower() or
         "gogocdnaws-2.online" in parsed_url.netloc.lower() or
+        "pornhd4k.net" in parsed_url.netloc.lower() or
+        "free50.cdnamz.me" in parsed_url.netloc.lower() or
+        "pornhouse.me" in parsed_url.netloc.lower() or
+        "cdn.pornhouse.me" in parsed_url.netloc.lower() or
         "img.1porn.tv" in parsed_url.netloc.lower() or
         "cast.1porn.tv" in parsed_url.netloc.lower() or
         "fpvcdn.com" in parsed_url.netloc.lower() or
@@ -644,6 +652,10 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "cdnamz.me" in host_l
             or "javfun.me" in host_l
             or "gogocdnaws-2.online" in host_l
+            or "pornhd4k.net" in host_l
+            or "free50.cdnamz.me" in host_l
+            or "pornhouse.me" in host_l
+            or "cdn.pornhouse.me" in host_l
             or "img.1porn.tv" in host_l
             or "cast.1porn.tv" in host_l
             or "fpvcdn.com" in host_l

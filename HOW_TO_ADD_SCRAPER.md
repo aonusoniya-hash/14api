@@ -4190,3 +4190,57 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=javfun"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://en.javfun.me/movies/asiansexdiary-boat-trip-and-jennifer"
 ```
+
+## PornHD4K.net (pornhd4k) & PornHouse.me (pornhouse) Implementation Notes
+
+[PornHD4K.net](https://pornhd4k.net/) and [PornHouse.me](https://pornhouse.me/) share the same JavHub/PornHD CMS as PornHD3X (JW Player, `/movies/{slug}`, `/ajax/get_sources/`).
+
+Package folders: `backend/app/scrapers/pornhd4k/`, `backend/app/scrapers/pornhouse/`.
+
+### Hosts
+
+| Site | Hosts | CDN |
+|------|-------|-----|
+| **pornhd4k** | `pornhd4k.net`, `www.pornhd4k.net` | `free50.cdnamz.me`, `cdnamz.me` |
+| **pornhouse** | `pornhouse.me`, `www.pornhouse.me` | `cdn.pornhouse.me` |
+
+### Listing URLs
+
+- Home page 1: `/`
+- Home page 2+: `/premium-porn-hd/page-{n}`
+- Category: `/category/{slug}/`
+- Studio: `/studio/{slug}/`
+- Search: `/search/{query}/`
+- List cards: `div.ml-item[data-movie-id]` with `a.ml-mask[href*='/movies/']`
+
+### Watch page + streams
+
+- **Watch URL:** `https://{host}/movies/{slug}` (no trailing slash required)
+- **Episode ID:** inline `var movie = { id: "..." }` or `episode-id` attribute
+- **Stream API:** `GET /ajax/get_sources/{episode_id}/{md5}?count=1&mobile=0`
+  - Requires session cookie + MD5 token (salt: `98126avrbi6m49vd7shxkn985`)
+  - Returns JW Player HLS playlist
+
+Package folders: `backend/app/scrapers/pornhd4k/`, `backend/app/scrapers/pornhouse/`.
+
+Registration: `sourceId="pornhd4k"` / `sourceId="pornhouse"` in explore, main, video_streaming, schemas.
+
+### Test commands
+
+```bash
+# PornHD4K
+curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://pornhd4k.net/movies/rk-prime-tony-rubino-vivienne-vo-getting-sleazy-in-the-speakeasy-01-07-2026\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://pornhd4k.net/&page=1&limit=20"
+curl "http://127.0.0.1:8000/api/v1/categories?source=pornhd4k"
+
+# PornHouse
+curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://pornhouse.me/movies/asian-panties-scene-2_bukkake-for-a-pretty-japanese-girl-in-lingerie-and-sex-toys\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://pornhouse.me/&page=1&limit=20"
+curl "http://127.0.0.1:8000/api/v1/categories?source=pornhouse"
+```

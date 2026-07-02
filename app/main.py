@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, porn91
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -217,6 +217,8 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if thepornbang.can_handle(host): return await thepornbang.scrape(url)
     if pornhd3x.can_handle(host): return await pornhd3x.scrape(url)
     if javfun.can_handle(host): return await javfun.scrape(url)
+    if pornhd4k.can_handle(host): return await pornhd4k.scrape(url)
+    if pornhouse.can_handle(host): return await pornhouse.scrape(url)
     if porn91.can_handle(host): return await porn91.scrape(url)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
@@ -309,6 +311,8 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if thepornbang.can_handle(host): return await thepornbang.list_videos(base_url=base_url, page=page, limit=limit)
     if pornhd3x.can_handle(host): return await pornhd3x.list_videos(base_url=base_url, page=page, limit=limit)
     if javfun.can_handle(host): return await javfun.list_videos(base_url=base_url, page=page, limit=limit)
+    if pornhd4k.can_handle(host): return await pornhd4k.list_videos(base_url=base_url, page=page, limit=limit)
+    if pornhouse.can_handle(host): return await pornhouse.list_videos(base_url=base_url, page=page, limit=limit)
     if porn91.can_handle(host): return await porn91.list_videos(base_url=base_url, page=page, limit=limit)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
@@ -539,6 +543,8 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s in ("thepornbang", "pornbang", "thepornbang.com"): return [_category_item(c) for c in thepornbang.get_categories()]
         if s in ("pornhd3x", "pornhd3x.tv", "www9.pornhd3x.tv"): return [_category_item(c) for c in pornhd3x.get_categories()]
         if s in ("javfun", "javfun.me", "en.javfun.me"): return [_category_item(c) for c in javfun.get_categories()]
+        if s in ("pornhd4k", "pornhd4k.net"): return [_category_item(c) for c in pornhd4k.get_categories()]
+        if s in ("pornhouse", "pornhouse.me"): return [_category_item(c) for c in pornhouse.get_categories()]
         if s in ("porn91", "91porn", "91porn.com"): return [_category_item(c) for c in porn91.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
