@@ -831,7 +831,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://en.javfun.me/search/{query}/",
         sourceId="javfun",
-        disable=False,
+        disable=True,
         pageSize=24,
     ),
     ExploreSourceResponse(
