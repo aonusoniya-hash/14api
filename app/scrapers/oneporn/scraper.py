@@ -177,13 +177,35 @@ def _parse_json_ld(soup: BeautifulSoup) -> dict[str, Any]:
     return {}
 
 
+def _normalize_quality_label(label: str | None) -> str:
+    text = str(label or "").strip()
+    if not text:
+        return "unknown"
+    if text.isdigit():
+        return f"{text}p"
+    lower = text.lower()
+    if lower in {"4k", "uhd", "2160"}:
+        return "2160p"
+    mq = re.search(r"(\d{3,4})[pP]", text)
+    if mq:
+        return f"{mq.group(1)}p"
+    return text
+
+
+def _quality_rank(label: str | None) -> int:
+    normalized = _normalize_quality_label(label).lower()
+    digits = "".join(filter(str.isdigit, normalized))
+    if digits:
+        return int(digits)
+    if normalized == "embed":
+        return 0
+    return 0
+
+
 def _quality_from_url(url: str, label: str = "") -> str:
-    label = (label or "").strip()
-    if label and label.lower() not in {"default", "auto"}:
-        mq = re.search(r"(\d{3,4})[pP]", label)
-        if mq:
-            return f"{mq.group(1)}p"
-        return label
+    normalized = _normalize_quality_label(label)
+    if normalized not in {"unknown", "default", "auto"}:
+        return normalized
     mq = _QUALITY_IN_URL_RE.search(url or "")
     if mq:
         return f"{mq.group(1)}p"
@@ -195,7 +217,31 @@ def _quality_from_url(url: str, label: str = "") -> str:
 
 def _stream_key(url: str) -> str:
     parsed = urlparse(_normalize_media_url(url))
-    return f"{parsed.netloc}{parsed.path}".lower()
+    path = (parsed.path or "/").rstrip("/").lower()
+    return f"{parsed.netloc.lower()}{path}"
+
+
+def _dedupe_streams(streams: list[dict[str, str]]) -> list[dict[str, str]]:
+    by_url: dict[str, dict[str, str]] = {}
+    for stream in streams:
+        src_url = _normalize_media_url(str(stream.get("url") or ""))
+        if not src_url:
+            continue
+        entry = dict(stream)
+        entry["url"] = src_url
+        entry["quality"] = _normalize_quality_label(str(stream.get("quality") or "default"))
+        key = _stream_key(src_url)
+        existing = by_url.get(key)
+        if existing is None or _quality_rank(entry["quality"]) >= _quality_rank(existing.get("quality")):
+            by_url[key] = entry
+
+    by_quality: dict[str, dict[str, str]] = {}
+    for stream in sorted(by_url.values(), key=lambda s: _quality_rank(s.get("quality")), reverse=True):
+        quality = _normalize_quality_label(str(stream.get("quality") or "default"))
+        if quality not in by_quality:
+            by_quality[quality] = stream
+
+    return sorted(by_quality.values(), key=lambda s: _quality_rank(s.get("quality")), reverse=True)
 
 
 def _extract_video_streams(html: str) -> dict[str, Any]:
@@ -219,17 +265,6 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
             if fmt == "hls":
                 hls_url = hls_url or src
 
-    for link in soup.select("a[href*='/get_file/'], .video-links__link[href*='/get_file/']"):
-        href = _normalize_media_url(str(link.get("href") or ""))
-        if not href:
-            continue
-        key = _stream_key(href)
-        if key in seen_urls:
-            continue
-        seen_urls.add(key)
-        text = link.get_text(" ", strip=True)
-        streams.append({"quality": _quality_from_url(href, text), "url": href, "format": "mp4"})
-
     if not streams:
         for match in re.finditer(
             r"https?://(?:www\.)?1porn\.tv/get_file/[^\"'\s<>]+\.mp4[^\"'\s<>]*",
@@ -237,7 +272,7 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
             re.IGNORECASE,
         ):
             src = _normalize_media_url(match.group(0))
-            if not src:
+            if not src or "download=" in src.lower():
                 continue
             key = _stream_key(src)
             if key in seen_urls:
@@ -251,11 +286,7 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
                 }
             )
 
-    def _qval(s: dict) -> int:
-        digits = "".join(filter(str.isdigit, str(s.get("quality", ""))))
-        return int(digits) if digits else 0
-
-    streams.sort(key=_qval, reverse=True)
+    streams = _dedupe_streams(streams)
     default_url = hls_url or (streams[0]["url"] if streams else None)
     return {
         "streams": streams,
@@ -302,12 +333,28 @@ async def fetch_page(url: str, *, referer: str | None = None) -> str:
 
 async def _resolve_redirect(url: str) -> str:
     headers = dict(_DEFAULT_HEADERS)
+    headers["Referer"] = BASE_SITE
+
+    try:
+        from curl_cffi.requests import AsyncSession
+    except ImportError:
+        AsyncSession = None  # type: ignore[misc, assignment]
+
+    if AsyncSession is not None:
+        for imp in ("chrome120", "chrome110", "safari15_3"):
+            try:
+                async with AsyncSession(impersonate=imp, headers=headers, timeout=30.0) as client:
+                    resp = await client.head(url, allow_redirects=True)
+                    final_url = str(resp.url)
+                    if final_url and (final_url != url or resp.status_code < 400):
+                        return final_url
+            except Exception:
+                continue
+
     try:
         session = await pool.get_session()
-        async with session.get(url, headers=headers, allow_redirects=True) as response:
-            final_url = str(response.url)
-            if any(x in final_url for x in (".mp4", ".m3u8", "get_file", "cdn", "ahcdn.com")):
-                return final_url
+        async with session.head(url, headers=headers, allow_redirects=True) as response:
+            return str(response.url)
     except Exception:
         pass
     return url
@@ -472,19 +519,25 @@ async def scrape(url: str) -> dict[str, Any]:
     video_data = data.get("video") or {}
     streams = video_data.get("streams") or []
     if streams:
-        resolved_streams = []
+        resolved_streams: list[dict[str, str]] = []
         for stream in streams:
             stream = dict(stream)
-            if "get_file" in stream.get("url", ""):
-                stream["url"] = await _resolve_redirect(stream["url"])
-                if ".m3u8" in stream["url"]:
-                    stream["format"] = "hls"
-                elif ".mp4" in stream["url"]:
-                    stream["format"] = "mp4"
+            src = str(stream.get("url") or "")
+            if "get_file" in src or src.startswith(BASE_SITE):
+                stream["url"] = await _resolve_redirect(src)
+            if ".m3u8" in stream["url"]:
+                stream["format"] = "hls"
+            elif ".mp4" in stream["url"] or "fpvcdn.com" in stream["url"]:
+                stream["format"] = "mp4"
+            stream["quality"] = _normalize_quality_label(str(stream.get("quality") or "default"))
             resolved_streams.append(stream)
+
+        resolved_streams = _dedupe_streams(resolved_streams)
         video_data["streams"] = resolved_streams
-        if video_data.get("default") and "get_file" in str(video_data["default"]):
-            video_data["default"] = await _resolve_redirect(str(video_data["default"]))
+        hls_url = next((s["url"] for s in resolved_streams if s.get("format") == "hls"), None)
+        video_data["hls"] = hls_url
+        video_data["default"] = hls_url or (resolved_streams[0]["url"] if resolved_streams else None)
+        video_data["has_video"] = bool(resolved_streams)
         data["video"] = video_data
 
     return data
