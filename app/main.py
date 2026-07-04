@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, no
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, henvids, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, henvids, muchohentai, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -158,6 +158,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if hentaimama.can_handle(host): return await hentaimama.scrape(url)
     if hentaibros.can_handle(host): return await hentaibros.scrape(url)
     if henvids.can_handle(host): return await henvids.scrape(url)
+    if muchohentai.can_handle(host): return await muchohentai.scrape(url)
     if hentaiocean.can_handle(host): return await hentaiocean.scrape(url)
     if hentaverse.can_handle(host): return await hentaverse.scrape(url)
     if hstream.can_handle(host): return await hstream.scrape(url)
@@ -255,6 +256,7 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if hentaimama.can_handle(host): return await hentaimama.list_videos(base_url=base_url, page=page, limit=limit)
     if hentaibros.can_handle(host): return await hentaibros.list_videos(base_url=base_url, page=page, limit=limit)
     if henvids.can_handle(host): return await henvids.list_videos(base_url=base_url, page=page, limit=limit)
+    if muchohentai.can_handle(host): return await muchohentai.list_videos(base_url=base_url, page=page, limit=limit)
     if hentaiocean.can_handle(host): return await hentaiocean.list_videos(base_url=base_url, page=page, limit=limit)
     if hentaverse.can_handle(host): return await hentaverse.list_videos(base_url=base_url, page=page, limit=limit)
     if hstream.can_handle(host): return await hstream.list_videos(base_url=base_url, page=page, limit=limit)
@@ -490,6 +492,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s in ("hentaimama", "hentaimama.io", "hmama"): return [_category_item(c) for c in hentaimama.get_categories()]
         if s in ("hentaibros", "hentaibros.net", "hbros"): return [_category_item(c) for c in hentaibros.get_categories()]
         if s in ("henvids", "henvids.com", "hvids"): return [_category_item(c) for c in henvids.get_categories()]
+        if s in ("muchohentai", "muchohentai.com", "mh"): return [_category_item(c) for c in muchohentai.get_categories()]
         if s in ("hentaiocean", "hentaiocean.com", "hocean"): return [_category_item(c) for c in hentaiocean.get_categories()]
         if s in ("hentaverse", "hentaverse.com", "hverse"): return [_category_item(c) for c in hentaverse.get_categories()]
         if s in ("hstream", "hstream.moe", "hstreammoe"): return [_category_item(c) for c in hstream.get_categories()]

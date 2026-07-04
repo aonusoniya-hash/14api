@@ -4429,3 +4429,73 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=henvids"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://henvids.com/hentai/kenki-virgo-2"
 ```
+
+## MuchoHentai.com (muchohentai) Implementation Notes
+
+[MuchoHentai.com](https://muchohentai.com/home) is a WordPress hentai site using JW Player. Watch URLs use `/{prefix}/{id}` paths (e.g. `/avH6Dh/200451`), and HLS streams are built from inline JW Player config plus `*.edge.tmncdn.io` CDN hosts.
+
+### Host aliases
+
+- `muchohentai.com`
+- `www.muchohentai.com`
+- `va01.edge.tmncdn.io`, `va02.edge.tmncdn.io` (stream CDN mirrors)
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h in SITE_ALIASES or h.endswith(".muchohentai.com") or h.endswith("edge.tmncdn.io")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://muchohentai.com/home`
+- Latest: `https://muchohentai.com/latest-hentai-posts/`
+- Series list: `https://muchohentai.com/hentai-series-list/`
+- Genre feeds: `https://muchohentai.com/g/{slug}/`
+- Search: `https://muchohentai.com/?s={query}`
+- Parse cards from `a[href]` matching `/{prefix}/{id}` with `img[alt]`, views text (`11.27K Views`)
+- Pagination: append `/page/{N}/` to list paths; search uses `?s=query&paged=N`
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://muchohentai.com/{prefix}/{id}/`
+- **Metadata:** Open Graph (`og:title`, `og:image`, `og:description`), page title, views regex, tag links (`a[rel='tag']`, `a[href*='/g/']`)
+- **Streams:** parse inline JW Player vars:
+  - `var servers = ['va01', 'va02'];`
+  - `var files = [{"file":"/wp-content/uploads/.../ja.m3u8"}];`
+  - Build HLS URLs as `https://{server}.edge.tmncdn.io` + relative file path for each mirror
+- Use `curl_cffi` browser impersonation with `Referer: https://muchohentai.com/home`
+
+### Categories (`get_categories`)
+
+Home, Latest, Series, Upcoming, Genre List, and `/g/{slug}/` feeds in `categories.json` (generated via `backend/scripts/gen_muchohentai_categories.py`).
+
+### Registration checklist for MuchoHentai
+
+Package folder: `backend/app/scrapers/muchohentai/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `muchohentai`, `muchohentai.com`, `mh`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists for `muchohentai.com` and `edge.tmncdn.io`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="muchohentai"`)
+
+### MuchoHentai verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://muchohentai.com/avH6Dh/200451\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://muchohentai.com/home&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://muchohentai.com/g/uncensored/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=muchohentai"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://muchohentai.com/avH6Dh/200451"
+```
