@@ -4247,3 +4247,49 @@ curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
 curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://pornhouse.me/&page=1&limit=20"
 curl "http://127.0.0.1:8000/api/v1/categories?source=pornhouse"
 ```
+
+## Hanime1.me (hanime1) Implementation Notes
+
+[Hanime1.me](https://hanime1.me/) is a Traditional Chinese hentai streaming site. Watch URLs use a numeric video ID query param (`/watch?v=407006`). Signed MP4 streams and thumbnails are served from `vdownload.hembed.com`.
+
+### Host aliases
+
+- `hanime1.me`
+- `www.hanime1.me`
+- `vdownload.hembed.com` / `*.hembed.com` (CDN for MP4 + thumbnails)
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://hanime1.me/`
+- Search/browse: `https://hanime1.me/search?sort=最新上市`, `?sort=最新上傳`, `?sort=他們在看`
+- Genre filters: `https://hanime1.me/search?genre=裏番`, `?genre=3DCG`, etc.
+- Text search: `https://hanime1.me/search?query={query}`
+- Parse `div.video-item-container` cards (`a.video-link`, `img.main-thumb`, `div.duration`, stats) or fallback `a[href*='watch?v=']`
+- Pagination: `?page=N` query parameter (page 1 omits `page`)
+
+### Metadata and streams (`scrape`)
+
+- Canonical watch URL: `https://hanime1.me/watch?v={ID}`
+- **Streams:** signed MP4 URLs on `vdownload.hembed.com/{ID}-1080p.mp4`, `-720p.mp4`, `-480p.mp4` from `<video><source>` and inline HTML
+- Metadata: `og:title`, `og:image`, `og:video:duration`, `#video-artist-name` uploader, `.single-video-tag` tags, view count/date in `.video-description-panel`
+- Use `curl_cffi` browser impersonation; plain pool fetch often gets 403
+
+Package folder: `backend/app/scrapers/hanime1/`.
+
+Registration: `sourceId="hanime1"` in explore, main, video_streaming, schemas.
+
+### Hanime1 verification examples
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/scrapes" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://hanime1.me/watch?v=407006\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hanime1.me/search?sort=%E6%9C%80%E6%96%B0%E4%B8%8A%E5%B8%82&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hanime1.me/search?genre=%E8%A3%8F%E7%95%AA&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=hanime1"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hanime1.me/watch?v=407006"
+```
