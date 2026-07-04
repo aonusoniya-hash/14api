@@ -4543,7 +4543,22 @@ Pagination:
 - **Watch URL shape:** `https://www.underhentai.net/{slug}/`
 - **Episode stream page:** `https://www.underhentai.net/watch/?id={id}&ep={ep}`
 - **List cards:** `article.data-block` with `.article-header h2 a`
-- **Streams:** parse inline JS on watch pages for `krakenfiles.com/embed-video/{id}` and `luluvdo.com/embed/{id}`; resolve KrakenFiles embed `<source src>` to direct MP4 on `*.krakencloud.net`
+- **Streams:** parse episode cards (`.ep2-card`) for Raw/Subbed variants; for each variant add `{variant} mega`, `{variant} krakenfiles`, and `{variant} lulustream` embed URLs from the linked `/watch/?id={id}&ep={ep}` page inline JS. Variant labels: `japanese raw`, `english sub`, `spanish sub`, or `sub`. For direct `/watch/` URLs, resolve the parent post via `/?p={id}` redirect before labeling.
+- Do **not** resolve KrakenFiles embed pages to direct MP4 — keep embed URLs only.
+
+Example stream labels:
+
+```text
+japanese raw mega
+japanese raw krakenfiles
+japanese raw lulustream
+english sub mega
+english sub krakenfiles
+english sub lulustream
+spanish sub mega
+spanish sub krakenfiles
+spanish sub lulustream
+```
 - Use `curl_cffi` browser impersonation with `Referer: https://www.underhentai.net/`
 
 ### Categories

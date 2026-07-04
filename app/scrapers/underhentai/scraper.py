@@ -75,15 +75,14 @@ _NON_VIDEO_SLUGS = frozenset(
 )
 _PATH_PAGE_SUFFIX_RE = re.compile(r"^(.+)/page/(\d+)$", re.IGNORECASE)
 _KRAKEN_EMBED_RE = re.compile(
-    r"""https?://krakenfiles\.com/embed-video/([A-Za-z0-9]+)""",
+    r"""https?://krakenfiles\.com/embed-video/[A-Za-z0-9]+""",
     re.IGNORECASE,
 )
 _LULU_EMBED_RE = re.compile(
-    r"""https?://luluvdo\.com/embed/([A-Za-z0-9]+)""",
+    r"""https?://luluvdo\.com/embed/[A-Za-z0-9]+""",
     re.IGNORECASE,
 )
-_M3U8_URL_RE = re.compile(r"""https?://[^\s"'<>]+\.m3u8(?:\?[^\s"'<>]*)?""", re.IGNORECASE)
-_MP4_URL_RE = re.compile(r"""https?://[^\s"'<>]+\.mp4(?:\?[^\s"'<>]*)?""", re.IGNORECASE)
+_DISQUS_URL_RE = re.compile(r"""var\s+disqus_url\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
 
 
 def can_handle(host: str) -> bool:
@@ -231,29 +230,270 @@ def _is_watch_url(url: str) -> bool:
     return bool(_WATCH_PAGE_RE.match((url or "").strip().split("#", 1)[0]))
 
 
-def _extract_watch_links(soup: BeautifulSoup) -> list[str]:
-    links: list[str] = []
+def _strip_emoji(text: str | None) -> str:
+    if not text:
+        return ""
+    return "".join(ch for ch in str(text) if ord(ch) < 0x1F000).strip()
+
+
+def _variant_prefix(vtype: str, subs_meta: str) -> str:
+    vtype_l = _strip_emoji(vtype).lower()
+    subs_l = _strip_emoji(subs_meta).lower()
+    if "raw" in vtype_l:
+        return "japanese raw"
+    if "spanish" in subs_l or "espa" in subs_l or "espanol" in subs_l:
+        return "spanish sub"
+    if "english" in subs_l:
+        return "english sub"
+    if "sub" in vtype_l:
+        return "sub"
+    return (_strip_emoji(vtype) or "sub").lower()
+
+
+def _stream_quality_label(variant: str, mirror: str) -> str:
+    variant = (variant or "").strip().lower()
+    mirror = (mirror or "").strip().lower()
+    if mirror:
+        return f"{variant} {mirror}".strip()
+    return variant
+
+
+def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    for card in soup.select(".ep2-card"):
+        vtype_el = card.select_one(".ep2-vtype")
+        vtype = _strip_emoji(vtype_el.get_text(" ", strip=True) if vtype_el else "")
+
+        subs_meta = ""
+        for item in card.select(".ep2-meta-item"):
+            label = item.select_one(".ep2-meta-label")
+            value = item.select_one(".ep2-meta-value")
+            if not label or not value:
+                continue
+            if "subs" in label.get_text(strip=True).lower():
+                subs_meta = value.get_text(" ", strip=True)
+
+        mega_url: Optional[str] = None
+        for a in card.select("a.ep2-dl"):
+            if "mega" in a.get_text(strip=True).lower():
+                mega_url = _normalize_media_url(a.get("href"))
+                break
+
+        stream_el = card.select_one("a.ep2-stream[href]")
+        stream_url = _normalize_media_url(stream_el.get("href")) if stream_el else None
+
+        cards.append(
+            {
+                "vtype": vtype,
+                "subs_meta": _strip_emoji(subs_meta),
+                "mega_url": mega_url,
+                "stream_url": stream_url,
+            }
+        )
+    return cards
+
+
+def _extract_embed_urls(page_html: str) -> dict[str, str]:
+    html = page_html or ""
+    kraken = _KRAKEN_EMBED_RE.search(html)
+    lulu = _LULU_EMBED_RE.search(html)
+    out: dict[str, str] = {}
+    if kraken:
+        out["krakenfiles"] = kraken.group(0).strip().replace("\\/", "/")
+    if lulu:
+        out["lulustream"] = lulu.group(0).strip().replace("\\/", "/")
+    return out
+
+
+def _watch_episode_key(watch_url: str) -> Optional[str]:
+    parsed = urlparse(watch_url)
+    if "/watch/" not in (parsed.path or ""):
+        return None
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    video_id = _first_non_empty(query.get("id"))
+    episode = _first_non_empty(query.get("ep"))
+    if video_id is None or episode is None:
+        return None
+    return f"{video_id}:{episode}"
+
+
+def _card_episode_key(card: dict[str, Any]) -> Optional[str]:
+    stream_url = card.get("stream_url")
+    if not stream_url:
+        return None
+    return _watch_episode_key(stream_url if str(stream_url).startswith("http") else urljoin(BASE_SITE, stream_url))
+
+
+def _watch_video_id(watch_url: str) -> Optional[str]:
+    parsed = urlparse(watch_url)
+    if "/watch/" not in (parsed.path or ""):
+        return None
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    return _first_non_empty(query.get("id"))
+
+
+async def _resolve_parent_url_from_watch(watch_url: str, *, referer: str) -> Optional[str]:
+    video_id = _watch_video_id(watch_url)
+    if not video_id:
+        return None
+
+    from curl_cffi import requests as cr
+
+    headers = dict(_DEFAULT_HEADERS)
+    headers["Referer"] = referer
+    lookup_url = f"{BASE_SITE}?p={video_id}"
+
+    def _do_request() -> Optional[str]:
+        for imp in ("chrome120", "chrome110", "safari15_3"):
+            try:
+                resp = cr.get(
+                    lookup_url,
+                    headers=headers,
+                    impersonate=imp,
+                    timeout=45.0,
+                    allow_redirects=True,
+                )
+                if resp.status_code != 200:
+                    continue
+                final = resp.url.rstrip("/") + "/"
+                if _VIDEO_PAGE_RE.match(final):
+                    return final
+            except Exception:
+                continue
+        return None
+
+    return await asyncio.to_thread(_do_request)
+
+
+def _find_card_for_watch(cards: list[dict[str, Any]], watch_url: str) -> Optional[dict[str, Any]]:
+    target = _watch_episode_key(watch_url)
+    if not target:
+        return None
+    for card in cards:
+        if _card_episode_key(card) == target:
+            return card
+    return None
+
+
+def _streams_from_card_variants(
+    cards: list[dict[str, Any]],
+    *,
+    embeds_by_watch: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    streams: list[dict[str, str]] = []
     seen: set[str] = set()
-    for a in soup.select("a.ep2-stream[href], a[href*='/watch/']"):
-        href = _normalize_media_url(a.get("href") or "")
-        if not href or "/watch/" not in href or href in seen:
+
+    for card in cards:
+        prefix = _variant_prefix(str(card.get("vtype") or ""), str(card.get("subs_meta") or ""))
+        mega_url = card.get("mega_url")
+        if mega_url and mega_url not in seen:
+            seen.add(mega_url)
+            streams.append(
+                {"quality": _stream_quality_label(prefix, "mega"), "url": mega_url, "format": "embed"}
+            )
+
+        watch_url = card.get("stream_url")
+        if not watch_url:
             continue
-        seen.add(href)
-        links.append(href)
-    return links
-
-
-def _extract_embed_urls(page_html: str) -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for pattern, label in ((_KRAKEN_EMBED_RE, "KrakenFiles"), (_LULU_EMBED_RE, "LuluStream")):
-        for match in pattern.finditer(page_html or ""):
-            embed_url = match.group(0).strip().replace("\\/", "/")
-            if embed_url in seen:
+        embeds = embeds_by_watch.get(str(watch_url), {})
+        for mirror_key, mirror_name in (("krakenfiles", "krakenfiles"), ("lulustream", "lulustream")):
+            embed_url = embeds.get(mirror_key)
+            if not embed_url or embed_url in seen:
                 continue
             seen.add(embed_url)
-            found.append((label, embed_url))
-    return found
+            streams.append(
+                {
+                    "quality": _stream_quality_label(prefix, mirror_name),
+                    "url": embed_url,
+                    "format": "embed",
+                }
+            )
+
+    return streams
+
+
+async def _collect_embeds_for_cards(
+    cards: list[dict[str, Any]],
+    *,
+    referer: str,
+) -> dict[str, dict[str, str]]:
+    embeds_by_watch: dict[str, dict[str, str]] = {}
+    for card in cards:
+        watch_url = card.get("stream_url")
+        if not watch_url or watch_url in embeds_by_watch:
+            continue
+        try:
+            watch_html = await fetch_page(watch_url, referer=referer)
+        except Exception:
+            embeds_by_watch[watch_url] = {}
+            continue
+        embeds_by_watch[watch_url] = _extract_embed_urls(watch_html)
+    return embeds_by_watch
+
+
+def _video_payload_from_streams(streams: list[dict[str, str]]) -> dict[str, Any]:
+    default = streams[0]["url"] if streams else None
+    return {
+        "streams": streams,
+        "hls": None,
+        "default": default,
+        "has_video": bool(streams),
+    }
+
+
+async def _streams_from_video_page(soup: BeautifulSoup, *, referer: str) -> dict[str, Any]:
+    cards = _parse_episode_cards(soup)
+    if not cards:
+        return _video_payload_from_streams([])
+    embeds_by_watch = await _collect_embeds_for_cards(cards, referer=referer)
+    streams = _streams_from_card_variants(cards, embeds_by_watch=embeds_by_watch)
+    return _video_payload_from_streams(streams)
+
+
+async def _streams_from_watch_page(
+    watch_html: str,
+    watch_url: str,
+    *,
+    referer: str,
+) -> dict[str, Any]:
+    parent_url = None
+    match = _DISQUS_URL_RE.search(watch_html or "")
+    if match:
+        parent_url = match.group(1).strip()
+    if not parent_url:
+        parent_url = await _resolve_parent_url_from_watch(watch_url, referer=referer)
+
+    cards: list[dict[str, Any]] = []
+    if parent_url:
+        try:
+            parent_html = await fetch_page(parent_url, referer=referer)
+            cards = _parse_episode_cards(BeautifulSoup(parent_html, "lxml"))
+        except Exception:
+            cards = []
+
+    card = _find_card_for_watch(cards, watch_url) if cards else None
+    if card:
+        embeds = _extract_embed_urls(watch_html)
+        streams = _streams_from_card_variants([card], embeds_by_watch={watch_url: embeds})
+        return _video_payload_from_streams(streams)
+
+    embeds = _extract_embed_urls(watch_html)
+    streams: list[dict[str, str]] = []
+    seen: set[str] = set()
+    fallback_prefix = "japanese raw"
+    for mirror_key, mirror_name in (("krakenfiles", "krakenfiles"), ("lulustream", "lulustream")):
+        embed_url = embeds.get(mirror_key)
+        if not embed_url or embed_url in seen:
+            continue
+        seen.add(embed_url)
+        streams.append(
+            {
+                "quality": _stream_quality_label(fallback_prefix, mirror_name),
+                "url": embed_url,
+                "format": "embed",
+            }
+        )
+    return _video_payload_from_streams(streams)
 
 
 async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
@@ -279,66 +519,6 @@ async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
 
 async def fetch_page(url: str, *, referer: str | None = None) -> str:
     return await _fetch_with_curl_cffi(url, referer=referer or DEFAULT_BROWSE_URL)
-
-
-async def _resolve_kraken_embed(embed_url: str) -> list[dict[str, str]]:
-    try:
-        page_html = await fetch_page(embed_url, referer=DEFAULT_BROWSE_URL)
-    except Exception:
-        return []
-    soup = BeautifulSoup(page_html, "lxml")
-    streams: list[dict[str, str]] = []
-    for source in soup.select("video source[src], source[src]"):
-        src = _normalize_media_url(source.get("src"))
-        if not src:
-            continue
-        fmt = "hls" if ".m3u8" in src.lower() else "mp4"
-        streams.append({"quality": "KrakenFiles", "url": src, "format": fmt})
-    if not streams:
-        for match in _MP4_URL_RE.finditer(page_html):
-            src = _normalize_media_url(match.group(0))
-            if src:
-                streams.append({"quality": "KrakenFiles", "url": src, "format": "mp4"})
-                break
-    return streams
-
-
-async def _streams_from_watch_html(page_html: str, watch_url: str) -> dict[str, Any]:
-    streams: list[dict[str, str]] = []
-    seen: set[str] = set()
-    hls_url: Optional[str] = None
-
-    for label, embed_url in _extract_embed_urls(page_html):
-        resolved = await _resolve_kraken_embed(embed_url) if "krakenfiles.com" in embed_url else []
-        if resolved:
-            for stream in resolved:
-                key = stream["url"]
-                if key in seen:
-                    continue
-                seen.add(key)
-                streams.append(stream)
-                if stream.get("format") == "hls" and hls_url is None:
-                    hls_url = key
-        else:
-            if embed_url in seen:
-                continue
-            seen.add(embed_url)
-            streams.append({"quality": label, "url": embed_url, "format": "embed"})
-
-    if watch_url not in seen:
-        seen.add(watch_url)
-        streams.append({"quality": "Watch Page", "url": watch_url, "format": "embed"})
-
-    default = next(
-        (s["url"] for s in streams if s.get("format") == "mp4"),
-        streams[0]["url"] if streams else None,
-    )
-    return {
-        "streams": streams,
-        "hls": hls_url,
-        "default": default,
-        "has_video": bool(streams),
-    }
 
 
 def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]]:
@@ -526,7 +706,7 @@ async def scrape(url: str) -> dict[str, Any]:
     if _is_watch_url(raw_url):
         watch_url = raw_url if raw_url.startswith("http") else urljoin(BASE_SITE, raw_url.lstrip("/"))
         watch_html = await fetch_page(watch_url, referer=DEFAULT_BROWSE_URL)
-        video_data = await _streams_from_watch_html(watch_html, watch_url)
+        video_data = await _streams_from_watch_page(watch_html, watch_url, referer=DEFAULT_BROWSE_URL)
         soup = BeautifulSoup(watch_html, "lxml")
         title = _clean_title(
             _first_non_empty(
@@ -562,11 +742,7 @@ async def scrape(url: str) -> dict[str, Any]:
     page_url = _resolve_video_url(url)
     page_html = await fetch_page(page_url, referer=DEFAULT_BROWSE_URL)
     soup = BeautifulSoup(page_html, "lxml")
-    watch_links = _extract_watch_links(soup)
-    video_data: dict[str, Any] = {"streams": [], "hls": None, "default": None, "has_video": False}
-    if watch_links:
-        watch_html = await fetch_page(watch_links[0], referer=page_url)
-        video_data = await _streams_from_watch_html(watch_html, watch_links[0])
+    video_data = await _streams_from_video_page(soup, referer=page_url)
     return parse_video_page(page_html, page_url, video=video_data)
 
 
