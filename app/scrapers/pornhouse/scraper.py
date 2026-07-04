@@ -42,6 +42,8 @@ _EPISODE_ID_RE = re.compile(
     r'episode-id=["\'](?P<id>[^"\']+)["\']',
     re.IGNORECASE,
 )
+# Tag listing pages reuse this placeholder in every card's link title attribute.
+_BOGUS_LINK_TITLES = frozenset({"peter the redemption"})
 
 
 def can_handle(host: str) -> bool:
@@ -83,6 +85,13 @@ def _meta(soup: BeautifulSoup, *, prop: str | None = None, name: str | None = No
         if tag and tag.get("content"):
             return str(tag.get("content")).strip()
     return None
+
+
+def _link_title(title: str | None) -> Optional[str]:
+    cleaned = _clean_title(title)
+    if cleaned and cleaned.lower() in _BOGUS_LINK_TITLES:
+        return None
+    return cleaned
 
 
 def _clean_title(title: str | None) -> Optional[str]:
@@ -509,9 +518,10 @@ def _parse_list_item(box: Any, *, base: str) -> Optional[dict[str, Any]]:
     title_el = box.select_one(".mli-info h2, h2")
     title = _clean_title(
         _first_non_empty(
-            link.get("title"),
             title_el.get_text(" ", strip=True) if title_el else None,
             img.get("alt") if img else None,
+            _link_title(link.get("title")),
+            link.get_text(" ", strip=True),
         )
     ) or "Unknown Video"
 
@@ -564,13 +574,15 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
                 continue
             img = link.find("img")
             seen.add(href)
+            title_el = link.select_one(".mli-info h2, h2")
             items.append(
                 {
                     "url": href,
                     "title": _clean_title(
                         _first_non_empty(
-                            link.get("title"),
+                            title_el.get_text(" ", strip=True) if title_el else None,
                             img.get("alt") if img else None,
+                            _link_title(link.get("title")),
                             link.get_text(" ", strip=True),
                         )
                     )
