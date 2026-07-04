@@ -4361,3 +4361,71 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hentaibros"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaibros.net/cheat-item-kanrikyoku-no-oshigoto-ex-episode-1/"
 ```
+
+## HenVids.com (henvids) Implementation Notes
+
+[HenVids.com](https://henvids.com/) is a Svelte-based hentai streaming site. Watch URLs use `/hentai/{slug}` paths, and HLS streams are served from `cdn.henvids.com`.
+
+### Host aliases
+
+- `henvids.com`
+- `www.henvids.com`
+- `cdn.henvids.com` (HLS + thumbnails)
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h in SITE_ALIASES or h.endswith(".henvids.com") or h == "cdn.henvids.com"
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://henvids.com/`
+- Latest: `https://henvids.com/latest`
+- Trending: `https://henvids.com/trending`
+- Tag feeds: `https://henvids.com/tag/{slug}`
+- Search: `https://henvids.com/search?q={query}`
+- Parse cards from `article` blocks with `a[href^='/hentai/']`, `img[alt]`, duration/views text
+- Pagination: `?page=N` query parameter (page 1 omits `page`)
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://henvids.com/hentai/{slug}`
+- **Metadata:** JSON-LD `VideoObject` (`name`, `description`, `thumbnailUrl`, `duration`, `uploadDate`, `interactionStatistic`, `productionCompany`, `genre`), plus Open Graph fallbacks
+- **Streams:** HLS playlist at `https://cdn.henvids.com/hentai/{slug}/playlist.m3u8` from JSON-LD `contentUrl`, `og:video`, or `<video><source>`
+- Duration uses ISO-8601 (`PT15M17S`) converted to `MM:SS` / `H:MM:SS`
+- Use `curl_cffi` browser impersonation with `Referer: https://henvids.com/`
+
+### Categories (`get_categories`)
+
+Home, Latest, Trending, All Tags, and individual `/tag/{slug}` feeds in `categories.json` (generated via `backend/scripts/gen_henvids_categories.py`).
+
+### Registration checklist for HenVids
+
+Package folder: `backend/app/scrapers/henvids/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `henvids`, `henvids.com`, `hvids`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists for `henvids.com` and `cdn.henvids.com`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="henvids"`)
+
+### HenVids verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://henvids.com/hentai/kenki-virgo-2\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://henvids.com/latest&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://henvids.com/tag/uncensored&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=henvids"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://henvids.com/hentai/kenki-virgo-2"
+```

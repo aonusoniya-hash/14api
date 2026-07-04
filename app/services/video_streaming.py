@@ -48,7 +48,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, henvids, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91
     from app.api.endpoints import thumbnails
     from urllib.parse import urlparse
     
@@ -116,6 +116,8 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = hentaimama
     elif hentaibros.can_handle(host):
         scraper_module = hentaibros
+    elif henvids.can_handle(host):
+        scraper_module = henvids
     elif hentaiocean.can_handle(host):
         scraper_module = hentaiocean
     elif hentaverse.can_handle(host):
@@ -416,6 +418,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "hentaimama.io" in parsed_url.netloc.lower() or
         "hentaibros.net" in parsed_url.netloc.lower() or
         "povblowjob.net" in parsed_url.netloc.lower() or
+        "henvids.com" in parsed_url.netloc.lower() or
+        "cdn.henvids.com" in parsed_url.netloc.lower() or
         "hentaiocean.com" in parsed_url.netloc.lower() or
         "w1.hentaiocean.com" in parsed_url.netloc.lower() or
         "w2.hentaiocean.com" in parsed_url.netloc.lower() or
@@ -560,6 +564,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "hentaimama.io" in host_l
             or "hentaibros.net" in host_l
             or "povblowjob.net" in host_l
+            or "henvids.com" in host_l
+            or "cdn.henvids.com" in host_l
             or "hentaiocean.com" in host_l
             or "w1.hentaiocean.com" in host_l
             or "w2.hentaiocean.com" in host_l
