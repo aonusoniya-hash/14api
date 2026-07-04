@@ -10,9 +10,17 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-BASE_SITE = "https://motherless.com/"
-SITE_HOST = "motherless.com"
-SITE_ALIASES = frozenset({"motherless.com", "www.motherless.com"})
+BASE_SITE = "https://motherless.xxx/"
+SITE_HOST = "motherless.xxx"
+SITE_HOSTS = frozenset({"motherless.xxx", "motherless.com"})
+SITE_ALIASES = frozenset(
+    {
+        "motherless.xxx",
+        "www.motherless.xxx",
+        "motherless.com",
+        "www.motherless.com",
+    }
+)
 CDN_HOST_MARKERS = ("motherlessmedia.com",)
 
 _DEFAULT_HEADERS = {
@@ -29,7 +37,7 @@ _DEFAULT_HEADERS = {
 _VIDEO_ID_RE = re.compile(r"^[A-F0-9]{4,12}$", re.IGNORECASE)
 _GALLERY_PATH_RE = re.compile(r"^G[VIGF]?[A-F0-9]+$", re.IGNORECASE)
 _VIDEO_PATH_RE = re.compile(
-    r"^https?://(?:www\.)?motherless\.com/(?:g/[a-z0-9_]+/)?(?P<id>[A-F0-9]{4,12})/?(?:$|[?#])",
+    r"^https?://(?:www\.)?motherless\.(?:xxx|com)/(?:g/[a-z0-9_]+/)?(?P<id>[A-F0-9]{4,12})/?(?:$|[?#])",
     re.IGNORECASE,
 )
 _CDN_VIDEO_RE = re.compile(
@@ -76,10 +84,17 @@ _RESERVED_PATH_HEADS = frozenset(
 )
 
 
-def can_handle(host: str) -> bool:
+def _normalize_host(host: str) -> str:
     h = (host or "").lower().split(":")[0]
-    if h.startswith("www."):
-        h = h[4:]
+    return h[4:] if h.startswith("www.") else h
+
+
+def _is_site_host(host: str) -> bool:
+    return _normalize_host(host) in SITE_HOSTS
+
+
+def can_handle(host: str) -> bool:
+    h = _normalize_host(host)
     if h in SITE_ALIASES:
         return True
     return any(marker in h for marker in CDN_HOST_MARKERS)
@@ -167,7 +182,14 @@ def _clean_title(title: str | None, *, video_id: str | None = None) -> Optional[
     if not title:
         return None
     t = str(title).strip()
-    for suffix in (" | MOTHERLESS.COM ™", " - MOTHERLESS.COM", " | MOTHERLESS.COM"):
+    for suffix in (
+        " | MOTHERLESS.XXX ™",
+        " - MOTHERLESS.XXX",
+        " | MOTHERLESS.XXX",
+        " | MOTHERLESS.COM ™",
+        " - MOTHERLESS.COM",
+        " | MOTHERLESS.COM",
+    ):
         if suffix.lower() in t.lower():
             t = re.split(re.escape(suffix), t, flags=re.I)[0].strip()
     if video_id and t.upper() == video_id.upper():
@@ -204,8 +226,8 @@ def _extract_video_id(url: str) -> Optional[str]:
         return m_cdn.group("id").upper()
 
     parsed = urlparse(raw)
-    host = (parsed.netloc or "").lower().replace("www.", "")
-    if host != SITE_HOST and "motherlessmedia.com" not in host:
+    host = _normalize_host(parsed.netloc or "")
+    if not _is_site_host(host) and "motherlessmedia.com" not in host:
         return None
 
     path = (parsed.path or "").strip("/")
@@ -484,6 +506,7 @@ def _is_missing_media_page(html: str) -> bool:
         "file not found" in low
         or "the page you're looking for cannot be found" in low
         or "404 - motherless.com" in low
+        or "404 - motherless.xxx" in low
     )
 
 
@@ -492,11 +515,11 @@ def parse_video_page(html: str, url: str, *, video: dict[str, Any] | None = None
     video_id = _extract_video_id(url) or ""
     page_url = _canonical_video_url(video_id) if video_id else url
 
+    meta_title_el = soup.select_one(".media-meta-title h1")
+    h1_el = soup.select_one("h1")
     raw_title = _first_non_empty(
-        soup.select_one(".media-meta-title h1").get_text(" ", strip=True)
-        if soup.select_one(".media-meta-title h1")
-        else None,
-        soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else None,
+        meta_title_el.get_text(" ", strip=True) if meta_title_el else None,
+        h1_el.get_text(" ", strip=True) if h1_el else None,
         _meta(soup, prop="og:title"),
         soup.title.get_text(strip=True) if soup.title else None,
     )

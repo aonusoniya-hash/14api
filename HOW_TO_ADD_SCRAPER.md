@@ -3119,29 +3119,32 @@ curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
   -d "{\"url\":\"https://www.eporner.com/embed/5avQdSA3oMK/\"}"
 ```
 
-## Motherless (motherless.com) Implementation Notes
+## Motherless (motherless.xxx) Implementation Notes
 
-[Motherless](https://motherless.com/) is a user-upload host. Single videos use a hex media code at the site root (e.g. `https://motherless.com/EE97006`). Category and tag browsing uses `/term/videos/{slug}`; feeds live under `/videos`, `/videos/recent`, etc. MP4 streams are served from `*.motherlessmedia.com` (SD and `-720p` variants).
+[Motherless](https://motherless.xxx/) is a user-upload host. The site moved from `motherless.com` to **`motherless.xxx`** (the old domain redirects). Single videos use a hex media code at the site root (e.g. `https://motherless.xxx/EE97006`). Category and tag browsing uses `/term/videos/{slug}`; feeds live under `/videos`, `/videos/recent`, etc. MP4 streams are served from `*.motherlessmedia.com` (SD and `-720p` variants).
 
 ### Host aliases
 
-- `motherless.com`
+- `motherless.xxx` (primary)
+- `www.motherless.xxx`
+- `motherless.com` (legacy redirect; still accepted by scraper)
 - `www.motherless.com`
 - `*.motherlessmedia.com` (CDN, for direct MP4 proxying)
 
 ### Listing and pagination (`list_videos`)
 
-- Home: `https://motherless.com/`
-- Videos hub: `https://motherless.com/videos`
+- Home: `https://motherless.xxx/`
+- Videos hub: `https://motherless.xxx/videos`
 - Feeds: `/videos/recent`, `/videos/favorited`, `/videos/viewed`, `/videos/commented`
-- Categories/tags: `https://motherless.com/term/videos/{slug}` (e.g. `amateur`, `milf`)
-- Parse `div.thumb-container.video` blocks: `data-codename`, full `href="https://motherless.com/{ID}"`, title in `a.caption.title`, duration in `span.size`, views in `span.hits .value`, uploader in `a.uploader`
+- Categories/tags: `https://motherless.xxx/term/videos/{slug}` (e.g. `amateur`, `milf`)
+- Parse `div.thumb-container.video` blocks: `data-codename`, full `href="https://motherless.xxx/{ID}"`, title in `a.caption.title`, duration in `span.size`, views in `span.hits .value`, uploader in `a.uploader`
 - Fallbacks: loose `href=".../{ID}" title="..."` regex and `data-codename="ID"` attributes
 - Pagination: `?page=N` query parameter (page 1 omits `page`)
+- Canonical listing URLs normalize to `motherless.xxx` even when HTML still links to `motherless.com`
 
 ### Metadata and streams (`scrape`)
 
-- Canonical watch URL: `https://motherless.com/{HEX_ID}` (also `https://motherless.com/g/{group}/{HEX_ID}`, `/iframe/{ID}`)
+- Canonical watch URL: `https://motherless.xxx/{HEX_ID}` (also `https://motherless.xxx/g/{group}/{HEX_ID}`, `/iframe/{ID}`)
 - **Primary streams (signed):** `__fileurl = '...'` and `<video><source src="..." res="720p">` from the watch page (URLs include `validfrom` / `hash` query params)
 - **Fallback:** unsigned `cdn{N}-videos.motherlessmedia.com/videos/{ID}.mp4` patterns only when HTML lacks sources
 - Metadata: `.media-meta-title h1`, `og:image`, `.media-meta-info span.count` for views, `/m/{user}` uploader, `/term/videos/` tags
@@ -3151,7 +3154,7 @@ Send `Cookie: age_verified=1` on fetch to bypass the age gate when possible.
 
 ### Categories (`get_categories`)
 
-Home, Videos, Recent, Favorited, Viewed, Commented, plus popular straight tags (Amateur, Homemade, Teen, MILF, Asian, etc.) in `categories.json`.
+Home, Recent, Favorited, Viewed, Commented, plus popular straight tags (Amateur, Homemade, Teen, MILF, Asian, etc.) in `categories.json`.
 
 ### Registration checklist for Motherless
 
@@ -3166,9 +3169,9 @@ Besides creating `backend/app/scrapers/motherless/`, update all of these:
 - `backend/app/services/video_streaming.py`
   - scraper selection branch
   - supported-host help text
-  - stream quality map host checks for `motherless.com`, `motherlessmedia.com`
+  - stream quality map host checks for `motherless.xxx`, `motherless.com`, `motherlessmedia.com`
 - `backend/app/api/endpoints/explore.py`
-  - add `ExploreSourceResponse` entry (`sourceId="motherless"`)
+  - add `ExploreSourceResponse` entry (`sourceId="motherless"`, `baseUrl="https://motherless.xxx/"`)
 
 If request URL validation still uses explicit host allowlists in your branch, also update:
 
@@ -3181,15 +3184,15 @@ If request URL validation still uses explicit host allowlists in your branch, al
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"https://motherless.com/EE97006\"}"
+  -d "{\"url\":\"https://motherless.xxx/EE97006\"}"
 
-curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://motherless.com/videos/recent&page=1&limit=20"
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://motherless.xxx/videos/recent&page=1&limit=20"
 
-curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://motherless.com/term/videos/amateur&page=2&limit=20"
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://motherless.xxx/term/videos/amateur&page=2&limit=20"
 
 curl "http://127.0.0.1:8000/api/v1/categories?source=motherless"
 
-curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://motherless.com/EE97006"
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://motherless.xxx/EE97006"
 ```
 
 ## YouJizz (youjizz.com) Implementation Notes
