@@ -1130,7 +1130,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://muchohentai.com/?s={query}",
         sourceId="muchohentai",
-        disable=False,
+        disable=True,
         pageSize=30,
     ),
     ExploreSourceResponse(
