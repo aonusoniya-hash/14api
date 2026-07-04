@@ -4293,3 +4293,71 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hanime1"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hanime1.me/watch?v=407006"
 ```
+
+## HentaiBros.net (hentaibros) Implementation Notes
+
+[HentaiBros.net](https://hentaibros.net/) is a WordPress RetroTube site with FV FlowPlayer embeds. Watch URLs are slug-based posts (`/{slug}/`), and MP4 streams are exposed inline in the player `data-item` JSON.
+
+### Host aliases
+
+- `hentaibros.net`
+- `www.hentaibros.net`
+- `povblowjob.net` (external MP4 CDN used by the player)
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h in SITE_ALIASES or h.endswith(".hentaibros.net") or h == "povblowjob.net"
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://hentaibros.net/`
+- Hentai list: `https://hentaibros.net/hentai-list/`
+- Series pages: `https://hentaibros.net/anime/{slug}/`
+- Genre feeds: `https://hentaibros.net/genres/{slug}/`
+- Search: `https://hentaibros.net/?s={query}`
+- Parse cards from `article.loop-video` (`a[href]`, `img[alt]`, `data-main-thumb`, `.duration`)
+- Pagination: append `/page/{N}/` to the list path (page 1 omits the page segment)
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://hentaibros.net/{slug}/`
+- **Metadata:** `og:title`, `og:image`, `og:description`, `h1.entry-title`, tag links (`a[rel='tag']`), series link (`a[href*='/anime/']`)
+- **Streams:** parse `.flowplayer[data-item]` JSON and read `sources[].src` (typically MP4 on `povblowjob.net`)
+- Fallback: regex scan page HTML for `.mp4` / `.m3u8` URLs when the player payload is missing
+- Use `curl_cffi` browser impersonation with `Referer: https://hentaibros.net/`
+
+### Categories (`get_categories`)
+
+Home, Hentai List, 3D Hentai, Motion Anime, Uncensored, genre feeds, and anime series pages in `categories.json` (generated via `backend/scripts/gen_hentaibros_categories.py`).
+
+### Registration checklist for HentaiBros
+
+Package folder: `backend/app/scrapers/hentaibros/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `hentaibros`, `hentaibros.net`, `hbros`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists for `hentaibros.net` and `povblowjob.net`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="hentaibros"`)
+
+### HentaiBros verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://hentaibros.net/cheat-item-kanrikyoku-no-oshigoto-ex-episode-1/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaibros.net/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://hentaibros.net/genres/uncensored/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=hentaibros"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hentaibros.net/cheat-item-kanrikyoku-no-oshigoto-ex-episode-1/"
+```
