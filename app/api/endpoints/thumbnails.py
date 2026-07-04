@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 @router.get("/proxy", summary="Thumbnail Proxy")
 async def thumbnail_proxy(
+    request: Request,
     url: str = Query(..., description="Target Thumbnail URL"),
     referer: str = Query(None, description="Referer header to send"),
     user_agent: str = Query(None, description="User-Agent header to send"),
-    request: Request = None
 ):
     """
     Proxy thumbnail images to bypass network or Referer restrictions.
@@ -37,7 +37,7 @@ async def thumbnail_proxy(
     
     # Build request headers
     headers = {}
-    ua = user_agent if user_agent else (request.headers.get("user-agent") if request else None)
+    ua = user_agent or request.headers.get("user-agent")
     if ua:
         headers["User-Agent"] = ua
     else:
