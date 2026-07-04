@@ -4499,3 +4499,81 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=muchohentai"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://muchohentai.com/avH6Dh/200451"
 ```
+
+## UnderHentai.net (underhentai) Implementation Notes
+
+[UnderHentai.net](https://www.underhentai.net/) is a WordPress hentai site with episode cards, download mirrors, and inline JS-injected stream embeds. Watch URLs use slug-based posts (`/{slug}/`), and streams are resolved from `/watch/?id={id}&ep={ep}` pages.
+
+### Host aliases
+
+- `underhentai.net`
+- `www.underhentai.net`
+- `static.underhentai.net` (thumbnails/assets)
+- `krakenfiles.com` / `krakencloud.net` (KrakenFiles embed MP4)
+- `luluvdo.com` (LuluStream embed fallback)
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h in SITE_ALIASES or h.endswith(".underhentai.net") or h in STREAM_HOSTS
+```
+
+### Browse/list URL shapes
+
+- Home: `https://www.underhentai.net/`
+- Index: `https://www.underhentai.net/index/`
+- Releases: `https://www.underhentai.net/releases/`
+- Uncensored: `https://www.underhentai.net/uncensored/`
+- Top: `https://www.underhentai.net/top/`
+- Tag feeds: `https://www.underhentai.net/tag/{slug}/`
+- Brand feeds: `https://www.underhentai.net/cat/brand/{slug}/`
+- Search: `https://www.underhentai.net/?s={query}`
+
+Pagination:
+
+- Home/tag/archive pages: `/page/{n}/` or `/tag/{slug}/page/{n}/`
+- Search: `/?s={query}&page={n}`
+
+### Metadata + stream extraction
+
+- **Watch URL shape:** `https://www.underhentai.net/{slug}/`
+- **Episode stream page:** `https://www.underhentai.net/watch/?id={id}&ep={ep}`
+- **List cards:** `article.data-block` with `.article-header h2 a`
+- **Streams:** parse inline JS on watch pages for `krakenfiles.com/embed-video/{id}` and `luluvdo.com/embed/{id}`; resolve KrakenFiles embed `<source src>` to direct MP4 on `*.krakencloud.net`
+- Use `curl_cffi` browser impersonation with `Referer: https://www.underhentai.net/`
+
+### Categories
+
+Home, Index, Releases, Uncensored, Top, and popular `/tag/{slug}/` feeds in `categories.json`.
+
+### Registration checklist
+
+Package folder: `backend/app/scrapers/underhentai/`.
+
+Besides creating `backend/app/scrapers/underhentai/`, update all of these:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `underhentai`, `underhentai.net`, `uhen`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists for `underhentai.net`, `static.underhentai.net`, `krakenfiles.com`, `krakencloud.net`, `luluvdo.com`)
+- `backend/app/api/endpoints/explore.py` (`sourceId="underhentai"`)
+
+### Manual verification
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.underhentai.net/cheat-item-kanrikyoku-no-oshigoto-ex/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.underhentai.net/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.underhentai.net/tag/ahegao/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=underhentai"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.underhentai.net/watch/?id=11135&ep=0"
+```
