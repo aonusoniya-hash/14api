@@ -250,12 +250,24 @@ def _variant_prefix(vtype: str, subs_meta: str) -> str:
     return (_strip_emoji(vtype) or "sub").lower()
 
 
-def _stream_quality_label(variant: str, mirror: str) -> str:
+def _format_variant_label(variant: str) -> str:
     variant = (variant or "").strip().lower()
-    mirror = (mirror or "").strip().lower()
-    if mirror:
-        return f"{variant} {mirror}".strip()
-    return variant
+    if not variant:
+        return "Sub"
+    return variant[0].upper() + variant[1:]
+
+
+_MIRROR_LABELS = {
+    "krakenfiles": "Krakenfiles",
+    "lulustream": "Lulustream",
+}
+
+
+def _stream_quality_label(variant: str, mirror: str) -> str:
+    variant_fmt = _format_variant_label(variant)
+    mirror_key = (mirror or "").strip().lower()
+    mirror_fmt = _MIRROR_LABELS.get(mirror_key, mirror_key.capitalize())
+    return f"{variant_fmt} {mirror_fmt}".strip()
 
 
 def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
@@ -273,12 +285,6 @@ def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
             if "subs" in label.get_text(strip=True).lower():
                 subs_meta = value.get_text(" ", strip=True)
 
-        mega_url: Optional[str] = None
-        for a in card.select("a.ep2-dl"):
-            if "mega" in a.get_text(strip=True).lower():
-                mega_url = _normalize_media_url(a.get("href"))
-                break
-
         stream_el = card.select_one("a.ep2-stream[href]")
         stream_url = _normalize_media_url(stream_el.get("href")) if stream_el else None
 
@@ -286,7 +292,6 @@ def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
             {
                 "vtype": vtype,
                 "subs_meta": _strip_emoji(subs_meta),
-                "mega_url": mega_url,
                 "stream_url": stream_url,
             }
         )
@@ -385,12 +390,6 @@ def _streams_from_card_variants(
 
     for card in cards:
         prefix = _variant_prefix(str(card.get("vtype") or ""), str(card.get("subs_meta") or ""))
-        mega_url = card.get("mega_url")
-        if mega_url and mega_url not in seen:
-            seen.add(mega_url)
-            streams.append(
-                {"quality": _stream_quality_label(prefix, "mega"), "url": mega_url, "format": "embed"}
-            )
 
         watch_url = card.get("stream_url")
         if not watch_url:

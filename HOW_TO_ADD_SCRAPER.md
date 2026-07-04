@@ -4543,21 +4543,18 @@ Pagination:
 - **Watch URL shape:** `https://www.underhentai.net/{slug}/`
 - **Episode stream page:** `https://www.underhentai.net/watch/?id={id}&ep={ep}`
 - **List cards:** `article.data-block` with `.article-header h2 a`
-- **Streams:** parse episode cards (`.ep2-card`) for Raw/Subbed variants; for each variant add `{variant} mega`, `{variant} krakenfiles`, and `{variant} lulustream` embed URLs from the linked `/watch/?id={id}&ep={ep}` page inline JS. Variant labels: `japanese raw`, `english sub`, `spanish sub`, or `sub`. For direct `/watch/` URLs, resolve the parent post via `/?p={id}` redirect before labeling.
+- **Streams:** parse episode cards (`.ep2-card`) for Raw/Subbed variants; for each variant add `{variant} Krakenfiles` and `{variant} Lulustream` embed URLs from the linked `/watch/?id={id}&ep={ep}` page inline JS. Variant labels: `Japanese raw`, `English sub`, `Spanish sub`, or `Sub`. MEGA/ouo download links are omitted. For direct `/watch/` URLs, resolve the parent post via `/?p={id}` redirect before labeling.
 - Do **not** resolve KrakenFiles embed pages to direct MP4 — keep embed URLs only.
 
 Example stream labels:
 
 ```text
-japanese raw mega
-japanese raw krakenfiles
-japanese raw lulustream
-english sub mega
-english sub krakenfiles
-english sub lulustream
-spanish sub mega
-spanish sub krakenfiles
-spanish sub lulustream
+Japanese raw Krakenfiles
+Japanese raw Lulustream
+English sub Krakenfiles
+English sub Lulustream
+Spanish sub Krakenfiles
+Spanish sub Lulustream
 ```
 - Use `curl_cffi` browser impersonation with `Referer: https://www.underhentai.net/`
 
