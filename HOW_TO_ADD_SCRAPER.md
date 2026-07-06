@@ -4589,3 +4589,84 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=underhentai"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://www.underhentai.net/watch/?id=11135&ep=0"
 ```
+
+## LetsPorn.com (letsporn) Implementation Notes
+
+[LetsPorn.com](https://letsporn.com/) is a KVS/kt_player tube site with root-level slug watch URLs, signed `/get_file/` MP4 links in inline `flashvars`, and home/category/channel/pornstar feeds.
+
+### Host aliases
+
+- `letsporn.com`
+- `www.letsporn.com`
+- `img.letsporn.com` (thumbnails CDN)
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h == "letsporn.com" or h.endswith(".letsporn.com")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://letsporn.com/`
+- Category: `https://letsporn.com/categories/{slug}`
+- Category sort: `https://letsporn.com/categories/{slug}?sort=newest|best|popular`
+- Channel: `https://letsporn.com/channels/{slug}`
+- Pornstar: `https://letsporn.com/pornstars/{slug}`
+
+**Pagination:** append `?page={n}` (page 1 omits the query param). Examples:
+
+- Page 2 home: `https://letsporn.com/?page=2`
+- Page 2 category: `https://letsporn.com/categories/teen?page=2`
+
+Parse cards from anchors whose `href` matches `https://letsporn.com/{slug}-{id}/`. Thumbnails often come from `img.letsporn.com/contents/videos_screenshots/...`.
+
+Use `curl_cffi` (Chrome impersonation) with `Referer: https://letsporn.com/`.
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://letsporn.com/{slug}-{id}/` (e.g. `/mia-khalifa-wants-bbc-to-bang-her-brutally-once-again-5477/`)
+- **Embed URL shape:** `https://letsporn.com/embed/{video_id}`
+- **Download URL shape:** `https://letsporn.com/download/{video_id}`
+- **Metadata:** Open Graph (`og:title`, `og:image`), `h1`, and inline `flashvars` (`video_title`, `video_categories`, `video_tags`, `video_id`)
+- **Streams:** signed progressive MP4 links from `flashvars`:
+  - `video_url` + `video_url_text`
+  - `video_alt_url` + `video_alt_url_text`
+  - `video_alt_url2` + `video_alt_url2_text`
+  - `video_alt_url3` + `video_alt_url3_text`
+- Strip `function/0/` kt_player prefixes before resolving `/get_file/` redirects.
+- Send `Referer: https://letsporn.com/` when accessing `/get_file/` URLs.
+
+### Categories (`get_categories`)
+
+Home, Most Viewed, and sample category feeds in `categories.json`.
+
+### Registration checklist for LetsPorn
+
+Package folder: `backend/app/scrapers/letsporn/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `letsporn`, `letsporn.com`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="letsporn"`)
+
+### LetsPorn verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://letsporn.com/mia-khalifa-wants-bbc-to-bang-her-brutally-once-again-5477/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://letsporn.com/categories/teen&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=letsporn"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://letsporn.com/mia-khalifa-wants-bbc-to-bang-her-brutally-once-again-5477/"
+```
