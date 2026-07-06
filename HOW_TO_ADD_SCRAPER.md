@@ -4680,3 +4680,78 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=letsporn"
 
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://letsporn.com/mia-khalifa-wants-bbc-to-bang-her-brutally-once-again-5477/"
 ```
+
+## TeamSkeetTube.com (teamskeettube) Implementation Notes
+
+[TeamSkeetTube.com](https://www.teamskeettube.com/) is a WordPress tube site using the `clean-tube-player` plugin. Watch pages embed XVideos via a base64-encoded `player-x.php?q=` payload; there are no direct MP4 URLs on the page.
+
+### Host aliases
+
+- `teamskeettube.com`
+- `www.teamskeettube.com`
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    if h in {"teamskeettube.com", "www.teamskeettube.com"}:
+        return True
+    return h.endswith(".teamskeettube.com")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://www.teamskeettube.com/`
+- Latest: `https://www.teamskeettube.com/?filter=latest`
+- Random: `https://www.teamskeettube.com/?filter=random`
+- Category: `https://www.teamskeettube.com/video/category/{slug}/`
+- Categories index: `https://www.teamskeettube.com/categories/`
+- Pornstars: `https://www.teamskeettube.com/pornstars/`
+
+WordPress-style path pagination (not `?page=N`):
+
+- Page 2 home: `https://www.teamskeettube.com/page/2/`
+- Page 2 category: `https://www.teamskeettube.com/video/category/anal-mom/page/2/`
+- Page 2 latest: `https://www.teamskeettube.com/page/2/?filter=latest`
+
+Query params such as `?filter=latest` are preserved; strip any existing `/page/N/` segment before appending the new page path.
+
+Parse cards from anchors matching `https://www.teamskeettube.com/video/{slug}/` (exclude `/video/category/` links).
+
+Use `curl_cffi` (Chrome impersonation) with `Referer: https://www.teamskeettube.com/` — plain `httpx` may get 406 Mod_Security on some URLs.
+
+### Scraping (`scrape`)
+
+- **Watch URL shape:** `https://www.teamskeettube.com/video/{slug}/`
+- **Player:** `player-x.php?q={base64}` decodes to `tag=<iframe src="https://www.xvideos.com/embedframe/{id}">`
+- **Streams:** expose decoded XVideos embed URLs as `format: "embed"` (same pattern as yesporn/justporn)
+- **Metadata:** `og:title`, `og:image`, `og:description`, JSON-LD Article; category from first `/video/category/` link
+
+Package folder: `backend/app/scrapers/teamskeettube/`.
+
+Register in:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `teamskeettube`, `teamskeettube.com`)
+- `backend/app/services/video_streaming.py`
+- `backend/app/models/schemas.py`
+- `backend/app/api/endpoints/explore.py` (`sourceId="teamskeettube"`)
+
+### Test commands
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/scrape" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://www.teamskeettube.com/video/pervz-chloe-temple-concept-charmed/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.teamskeettube.com/video/category/pervz&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://www.teamskeettube.com/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=teamskeettube"
+
+curl "http://127.0.0.1:8000/api/v1/videos/info?url=https://www.teamskeettube.com/video/pervz-chloe-temple-concept-charmed/"
+```
