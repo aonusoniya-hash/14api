@@ -4613,15 +4613,25 @@ def can_handle(host: str) -> bool:
 ### Listing and pagination (`list_videos`)
 
 - Home: `https://letsporn.com/`
-- Category: `https://letsporn.com/categories/{slug}`
-- Category sort: `https://letsporn.com/categories/{slug}?sort=newest|best|popular`
-- Channel: `https://letsporn.com/channels/{slug}`
-- Pornstar: `https://letsporn.com/pornstars/{slug}`
+- Popular: `https://letsporn.com/popular/`
+- Newest: `https://letsporn.com/newest/`
+- Best: `https://letsporn.com/best/`
+- Category: `https://letsporn.com/categories/{slug}/`
+- Category sort: `https://letsporn.com/categories/{slug}/?sort=newest|best|popular`
+- Channel: `https://letsporn.com/channels/{slug}/`
+- Pornstar: `https://letsporn.com/pornstars/{slug}/`
 
-**Pagination:** append `?page={n}` (page 1 omits the query param). Examples:
+**Pagination:** append `/{page}/` to the list path (page 1 omits the page segment). Preserve existing query params such as `sort=newest`. Examples:
 
-- Page 2 home: `https://letsporn.com/?page=2`
-- Page 2 category: `https://letsporn.com/categories/teen?page=2`
+- Page 2 popular: `https://letsporn.com/popular/2/`
+- Page 2 newest: `https://letsporn.com/newest/2/`
+- Page 2 category: `https://letsporn.com/categories/teen/2/`
+- Page 2 category (sorted): `https://letsporn.com/categories/teen/2/?sort=newest`
+- Page 2 channel: `https://letsporn.com/channels/brazzers/2/`
+
+For bare home (`https://letsporn.com/`), page 2+ maps to `https://letsporn.com/popular/{page}/` because root `/2/` returns 404.
+
+Do **not** use `?page=` — LetsPorn ignores that query param and returns page 1 again.
 
 Parse cards from anchors whose `href` matches `https://letsporn.com/{slug}-{id}/`. Thumbnails often come from `img.letsporn.com/contents/videos_screenshots/...`.
 

@@ -63,6 +63,7 @@ _RESERVED_PATH_HEADS = frozenset(
         "live-sex",
         "most-viewed",
         "new",
+        "newest",
         "best",
         "popular",
     }
@@ -514,6 +515,22 @@ async def scrape(url: str) -> dict[str, Any]:
     return data
 
 
+_LIST_PATH_HEADS = frozenset(
+    {
+        "categories",
+        "channels",
+        "pornstars",
+        "explore",
+        "charts",
+        "most-viewed",
+        "search",
+        "popular",
+        "newest",
+        "best",
+    }
+)
+
+
 def _build_list_page_url(base_url: str, page: int) -> str:
     raw = (base_url or "").strip() or BASE_SITE
     if not raw.startswith("http"):
@@ -521,26 +538,30 @@ def _build_list_page_url(base_url: str, page: int) -> str:
 
     page_num = max(1, int(page) if page else 1)
     parsed = urlparse(raw)
-    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
-    query = dict(query_pairs)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.pop("page", None)
 
-    if page_num > 1:
-        query["page"] = str(page_num)
+    parts = _path_parts(parsed.path)
+    if parts and parts[-1].isdigit():
+        parts = parts[:-1]
+
+    if page_num <= 1:
+        new_path = "/" + "/".join(parts) + ("/" if parts else "")
+    elif not parts:
+        # Root home has no /2/ feed; popular is the closest paginated index.
+        new_path = f"/popular/{page_num}/"
+    elif parts[0] in _LIST_PATH_HEADS or len(parts) >= 2:
+        new_path = "/" + "/".join(parts + [str(page_num)]) + "/"
     else:
-        query.pop("page", None)
-
-    new_query = urlencode(query)
-    path = parsed.path or "/"
-    if not path.endswith("/") and not parsed.query and page_num <= 1:
-        path = path + "/"
+        new_path = "/" + "/".join(parts + [str(page_num)]) + "/"
 
     return urlunparse(
         (
             parsed.scheme or "https",
             parsed.netloc or SITE_HOST,
-            path,
+            new_path,
             "",
-            new_query,
+            urlencode(query),
             "",
         )
     )
