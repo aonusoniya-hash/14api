@@ -36,6 +36,14 @@ _XVIDEOS_EMBED_RE = re.compile(
     r"https?://(?:www\.)?xvideos\.com/embedframe/[a-z0-9]+",
     re.IGNORECASE,
 )
+_CATEGORY_HREF_RE = re.compile(
+    r"teamskeettube\.com/video/category/(?P<slug>[^/?#]+)/?",
+    re.IGNORECASE,
+)
+_CATEGORY_SLUG_ALIASES = {
+    "freeuse": "freeuse-bundle",
+}
+_LIST_ARTICLE_SELECTOR = "article.thumb-block, article.loop-video"
 
 
 def can_handle(host: str) -> bool:
@@ -108,6 +116,14 @@ def _clean_title(title: str | None) -> Optional[str]:
             "swappz",
             "exxxtra small",
             "teamskeet",
+            "anal mom",
+            "bad milfs",
+            "shoplyfter mylf",
+            "perv doctor",
+            "perv nana",
+            "perv therapy",
+            "freeuse fantasy",
+            "freeuse milf",
         }:
             t = t.split(":", 1)[1].strip()
     return t or None
@@ -172,6 +188,50 @@ def _normalize_video_href(href: str) -> Optional[str]:
     return f"https://www.teamskeettube.com/video/{slug}/"
 
 
+def _normalize_category_slug(slug: str) -> str:
+    s = (slug or "").strip().strip("/").lower()
+    return _CATEGORY_SLUG_ALIASES.get(s, s)
+
+
+def _normalize_category_href(href: str) -> Optional[str]:
+    href = (href or "").strip()
+    if not href:
+        return None
+    if href.startswith("/"):
+        href = urljoin(BASE_SITE, href)
+    m = _CATEGORY_HREF_RE.search(href)
+    if not m:
+        return None
+    slug = _normalize_category_slug(m.group("slug"))
+    return f"https://www.teamskeettube.com/video/category/{slug}/"
+
+
+def _normalize_list_base_url(base_url: str) -> str:
+    raw = (base_url or "").strip() or BASE_SITE
+    if not raw.startswith("http"):
+        raw = urljoin(BASE_SITE, raw.lstrip("/"))
+    canon = _normalize_category_href(raw)
+    return canon or raw
+
+
+def _category_name_from_article(article: Any) -> Optional[str]:
+    for cls in article.get("class") or []:
+        if not isinstance(cls, str) or not cls.startswith("category-"):
+            continue
+        slug = cls[len("category-") :]
+        return slug.replace("-", " ").title()
+    return None
+
+
+def _embeds_from_player_payload(data: dict[str, str], _add) -> None:
+    tag = data.get("tag") or ""
+    for match in _EMBED_SRC_RE.finditer(tag):
+        _add(match.group(1))
+    url = data.get("url") or data.get("video_url") or ""
+    if url:
+        _add(url)
+
+
 def _extract_embed_urls(html: str) -> list[str]:
     seen: set[str] = set()
     embeds: list[str] = []
@@ -184,17 +244,23 @@ def _extract_embed_urls(html: str) -> list[str]:
         embeds.append(media)
 
     for q in _PLAYER_Q_RE.findall(html or ""):
-        data = _decode_player_q(q)
-        tag = data.get("tag") or ""
-        for match in _EMBED_SRC_RE.finditer(tag):
-            _add(match.group(1))
+        _embeds_from_player_payload(_decode_player_q(q), _add)
 
     for match in _XVIDEOS_EMBED_RE.findall(html or ""):
         _add(match)
 
-    for iframe in BeautifulSoup(html, "lxml").select("iframe[src]"):
-        src = str(iframe.get("src") or "").strip()
-        if src and any(x in src.lower() for x in ("embedframe", "embed", "player")):
+    soup = BeautifulSoup(html, "lxml")
+    for iframe in soup.select("iframe[src]"):
+        src = _normalize_media_url(str(iframe.get("src") or "").strip())
+        if not src:
+            continue
+        if "player-x.php" in src.lower():
+            parsed = urlparse(src)
+            q = dict(parse_qsl(parsed.query)).get("q")
+            if q:
+                _embeds_from_player_payload(_decode_player_q(q), _add)
+            continue
+        if any(x in src.lower() for x in ("embedframe", "embed", "player")):
             if "teamskeettube.com/wp-content/plugins" not in src.lower():
                 _add(src)
 
@@ -400,7 +466,23 @@ def _parse_list_anchor(anchor: Any) -> Optional[dict[str, Any]]:
     }
 
 
+def _parse_list_article(article: Any) -> Optional[dict[str, Any]]:
+    anchor = article.select_one("a[href*='/video/']")
+    if anchor is None:
+        return None
+
+    parsed = _parse_list_anchor(anchor)
+    if not parsed:
+        return None
+
+    uploader = _category_name_from_article(article)
+    if uploader:
+        parsed["uploader_name"] = uploader
+    return parsed
+
+
 async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[dict[str, Any]]:
+    base_url = _normalize_list_base_url(base_url)
     page_url = _build_list_page_url(base_url, page)
     try:
         html = await fetch_page(page_url, referer=base_url or BASE_SITE)
@@ -411,10 +493,16 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    for anchor in soup.select("a[href*='/video/']"):
+    articles = soup.select(_LIST_ARTICLE_SELECTOR)
+    nodes = articles if articles else soup.select("a[href*='/video/']")
+
+    for node in nodes:
         if len(items) >= limit:
             break
-        parsed = _parse_list_anchor(anchor)
+        if node.name == "a":
+            parsed = _parse_list_anchor(node)
+        else:
+            parsed = _parse_list_article(node)
         if not parsed or parsed["url"] in seen:
             continue
         seen.add(parsed["url"])

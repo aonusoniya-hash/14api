@@ -4708,8 +4708,10 @@ def can_handle(host: str) -> bool:
 - Latest: `https://www.teamskeettube.com/?filter=latest`
 - Random: `https://www.teamskeettube.com/?filter=random`
 - Category: `https://www.teamskeettube.com/video/category/{slug}/`
-- Categories index: `https://www.teamskeettube.com/categories/`
+- Categories index (paginated, 4 pages): `https://www.teamskeettube.com/categories/`
 - Pornstars: `https://www.teamskeettube.com/pornstars/`
+
+`categories.json` has 73 entries (Home, Latest, Random + 70 brand categories scraped from `/categories/` pages 1–4). The `freeuse` slug is an alias that redirects to home on-site; use `freeuse-bundle` (mapped automatically in `list_videos`).
 
 WordPress-style path pagination (not `?page=N`):
 
@@ -4719,7 +4721,7 @@ WordPress-style path pagination (not `?page=N`):
 
 Query params such as `?filter=latest` are preserved; strip any existing `/page/N/` segment before appending the new page path.
 
-Parse cards from anchors matching `https://www.teamskeettube.com/video/{slug}/` (exclude `/video/category/` links).
+Parse cards from `article.thumb-block` / `article.loop-video` anchors matching `https://www.teamskeettube.com/video/{slug}/` (exclude `/video/category/` links). Category name comes from `category-{slug}` article classes.
 
 Use `curl_cffi` (Chrome impersonation) with `Referer: https://www.teamskeettube.com/` — plain `httpx` may get 406 Mod_Security on some URLs.
 
