@@ -553,20 +553,3 @@ class UpdateQuota(BaseModel):
 class ClearCacheRequest(BaseModel):
     pattern: Optional[str] = None  # Clear specific pattern or all
 
-
-# ===== Notification Schemas =====
-
-class NotificationItem(BaseModel):
-    id: str
-    title: str
-    message: str
-    type: str = "info" # info, warning, success, error
-    icon: Optional[str] = None
-    action_text: Optional[str] = None
-    action_url: Optional[str] = None
-    is_dismissible: bool = True
-    created_at: datetime = Field(default_factory=datetime.now)
-
-class NotificationResponse(BaseModel):
-    notifications: list[NotificationItem]
-    total: int
