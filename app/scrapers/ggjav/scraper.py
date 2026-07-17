@@ -313,13 +313,16 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     if not raw.startswith("http"):
         raw = urljoin(BASE_SITE, raw.lstrip("/"))
     parsed = urlparse(raw)
+    path = parsed.path or "/"
+    if path in ("/", ""):
+        path = "/main/uncensored"
     q = dict(parse_qsl(parsed.query.replace("&&", "&"), keep_blank_values=True))
     q["page"] = str(max(1, page))
     return urlunparse(
         (
             parsed.scheme or "https",
             parsed.netloc or SITE_HOST,
-            parsed.path or "/",
+            path,
             "",
             urlencode(q),
             "",

@@ -283,7 +283,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://pimpbunny.com/videos/",
+        baseUrl="https://pimpbunny.com/",
         nickname="PimpBunny",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/pimpbunny.png",
         accentColor="#E91E63",
@@ -296,7 +296,7 @@ EXPLORE_SOURCES = [
         pageSize=32,
     ),
     ExploreSourceResponse(
-        baseUrl="https://app.hentaiser.app/animes/",
+        baseUrl="https://app.hentaiser.app/",
         nickname="Hentaiser",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/hentaizer.webp",
         accentColor="#6A1B9A",
@@ -491,7 +491,7 @@ EXPLORE_SOURCES = [
         pageSize=30,
     ),
     ExploreSourceResponse(
-        baseUrl="https://hohoj.tv/search?type=all",
+        baseUrl="https://hohoj.tv/",
         nickname="HoHoJ",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/hohoj.png",
         accentColor="#FF65C1",
@@ -504,7 +504,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://ggjav.com/main/uncensored",
+        baseUrl="https://ggjav.com/",
         nickname="GGJAV",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/ggjav.png",
         accentColor="#2287F0",
@@ -517,7 +517,7 @@ EXPLORE_SOURCES = [
         pageSize=32,
     ),
     ExploreSourceResponse(
-        baseUrl="https://porn87.com/main/tag?lineup=create_time",
+        baseUrl="https://porn87.com/",
         nickname="Porn87",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/porn87.png",
         accentColor="#FF007E",
@@ -530,7 +530,7 @@ EXPLORE_SOURCES = [
         pageSize=32,
     ),
     ExploreSourceResponse(
-        baseUrl="https://0511.sp2026.dev/v.php?category=ori&viewtype=basic",
+        baseUrl="https://0511.sp2026.dev/",
         nickname="91Porn",
         favicon="https://0511.sp2026.dev/images/logo.png",
         accentColor="#FF6F00",
@@ -556,7 +556,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://kanav.ad/index.php/vod/type/id/1.html",
+        baseUrl="https://kanav.ad/",
         nickname="KanAV",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/kanav.ico",
         accentColor="#E91E63",
@@ -569,7 +569,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://missav.ai/dm265/en",
+        baseUrl="https://missav.ai/",
         nickname="MissAV",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/missav.ico",
         accentColor="#F43F5E",
@@ -647,7 +647,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://zmaal.net/latest/",
+        baseUrl="https://zmaal.net/",
         nickname="ZMaal",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/zmaal.webp",
         accentColor="#1565C0",
@@ -738,7 +738,7 @@ EXPLORE_SOURCES = [
         pageSize=36,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.3movs.com/latest-updates/",
+        baseUrl="https://www.3movs.com/",
         nickname="3Movs",
         favicon="https://www.3movs.com/favicon.ico",
         accentColor="#E65100",
@@ -751,7 +751,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.porndig.com/video/",
+        baseUrl="https://www.porndig.com/",
         nickname="PornDig",
         favicon="https://assets.porndig.com/assets/porndig/img/favicon.ico",
         accentColor="#003791",
@@ -764,7 +764,7 @@ EXPLORE_SOURCES = [
         pageSize=36,
     ),
     ExploreSourceResponse(
-        baseUrl="https://txxx.com/latest-updates/",
+        baseUrl="https://txxx.com/",
         nickname="TXXX",
         favicon="https://txxx.com/static/images/favicons/favicon-32x32.png",
         accentColor="#E45257",
@@ -790,7 +790,7 @@ EXPLORE_SOURCES = [
         pageSize=60,
     ),
     ExploreSourceResponse(
-        baseUrl="https://ww2.pornhoarder.tw/hp/",
+        baseUrl="https://ww2.pornhoarder.tw/",
         nickname="PornHoarder",
         favicon="https://ww2.pornhoarder.tw/favicon.ico",
         accentColor="#FB7B00",
@@ -816,7 +816,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.justporn.com/latest-updates/",
+        baseUrl="https://www.justporn.com/",
         nickname="JustPorn",
         favicon="https://www.justporn.com/favicon.ico",
         accentColor="#1565C0",
@@ -829,7 +829,7 @@ EXPLORE_SOURCES = [
         pageSize=40,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.porngo.com/latest-updates/",
+        baseUrl="https://www.porngo.com/",
         nickname="PornGO",
         favicon="https://www.porngo.com/favicon-32x32.png",
         accentColor="#E53935",
@@ -842,7 +842,7 @@ EXPLORE_SOURCES = [
         pageSize=40,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.1porn.tv/latest-updates/",
+        baseUrl="https://www.1porn.tv/",
         nickname="1Porn.TV",
         favicon="https://www.1porn.tv/favicon.ico",
         accentColor="#101214",
@@ -855,7 +855,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www.thepornbang.com/home36/",
+        baseUrl="https://www.thepornbang.com/",
         nickname="ThePornBang",
         favicon="https://www.thepornbang.com/favicon.ico",
         accentColor="#E53935",
@@ -868,14 +868,14 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://www9.pornhd3x.tv/",
+        baseUrl="https://pornhd3x.tv/",
         nickname="PornHD3X",
-        favicon="https://www9.pornhd3x.tv/favicon.ico",
+        favicon="https://www.pornhd3x.tv/favicon.ico",
         accentColor="#009CCE",
         category="porn",
         isVerified=False,
         hasCategories=True,
-        searchUrlTemplate="https://www9.pornhd3x.tv/search/{query}/",
+        searchUrlTemplate="https://www.pornhd3x.tv/search/{query}/",
         sourceId="pornhd3x",
         disable=False,
         pageSize=28,
@@ -959,7 +959,7 @@ EXPLORE_SOURCES = [
         pageSize=30,
     ),
     ExploreSourceResponse(
-        baseUrl="https://blowjobs.pro/videos/newest/",
+        baseUrl="https://blowjobs.pro/",
         nickname="BlowjobsPro",
         favicon="https://raw.githubusercontent.com/freelancermilonid132bd-ui/apphub/refs/heads/main/logo/blowjobs.ico",
         accentColor="#EC407A",
@@ -1195,7 +1195,7 @@ EXPLORE_SOURCES = [
         pageSize=30,
     ),
     ExploreSourceResponse(
-        baseUrl="https://henvids.com/latest",
+        baseUrl="https://henvids.com/",
         nickname="HenVids",
         favicon="https://henvids.com/logo-small.avif",
         accentColor="#E91E63",
@@ -1208,7 +1208,7 @@ EXPLORE_SOURCES = [
         pageSize=24,
     ),
     ExploreSourceResponse(
-        baseUrl="https://muchohentai.com/home",
+        baseUrl="https://muchohentai.com/",
         nickname="MuchoHentai",
         favicon="https://muchohentai.com/wp-content/uploads/mhlogo.png",
         accentColor="#FF6F00",
@@ -1234,7 +1234,7 @@ EXPLORE_SOURCES = [
         pageSize=30,
     ),
     ExploreSourceResponse(
-        baseUrl="https://hentaiocean.com/view/recent-releases",
+        baseUrl="https://hentaiocean.com/",
         nickname="Hentai Ocean",
         favicon="https://hentaiocean.com/favicon.png",
         accentColor="#3273DC",
@@ -1247,7 +1247,7 @@ EXPLORE_SOURCES = [
         pageSize=40,
     ),
     ExploreSourceResponse(
-        baseUrl="https://hentaverse.com/newest",
+        baseUrl="https://hentaverse.com/",
         nickname="Hentaverse",
         favicon="https://hentaverse.com/Dfavicon.ico",
         accentColor="#E53935",
@@ -1260,7 +1260,7 @@ EXPLORE_SOURCES = [
         pageSize=20,
     ),
     ExploreSourceResponse(
-        baseUrl="https://hstream.moe/search?order=recently-uploaded",
+        baseUrl="https://hstream.moe/",
         nickname="hstream.moe",
         favicon="https://hstream.moe/images/cropped-HS-1-192x192.webp",
         accentColor="#BE123C",

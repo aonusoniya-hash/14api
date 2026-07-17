@@ -254,7 +254,11 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     if not raw.startswith("http"):
         raw = urljoin(BASE_SITE, raw.lstrip("/"))
     parsed = urlparse(raw)
+    path = parsed.path or "/"
     q = dict(parse_qsl(parsed.query.replace("&&", "&"), keep_blank_values=True))
+    if path in ("/", ""):
+        path = "/main/tag"
+        q.setdefault("lineup", "create_time")
     # Site pagination is 1-based (`page=2` for UI page 2); page 1 omits the param.
     page_num = max(1, int(page) if page else 1)
     if page_num <= 1:
@@ -265,7 +269,7 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         (
             parsed.scheme or "https",
             parsed.netloc or SITE_HOST,
-            parsed.path or "/",
+            path,
             "",
             urlencode(q),
             "",

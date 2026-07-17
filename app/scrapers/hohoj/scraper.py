@@ -207,12 +207,16 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         raw = urljoin(BASE_SITE, raw.lstrip("/"))
     parsed = urlparse(raw)
     q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    path = parsed.path or "/"
+    if path in ("/", "") and not q:
+        path = "/search"
+        q["type"] = "all"
     q["p"] = str(max(1, page))
     return urlunparse(
         (
             parsed.scheme or "https",
             parsed.netloc or SITE_HOST,
-            parsed.path or "/",
+            path,
             "",
             urlencode(q),
             "",
@@ -253,9 +257,10 @@ def parse_video_page(html: str, url: str, *, embed_html: str | None = None) -> d
     video_id = _extract_video_id(url) or ""
     page_url = _canonical_video_url(video_id) if video_id else url
 
+    title_el = soup.select_one("h5.mt-3")
     title = _clean_title(
         _first_non_empty(
-            soup.select_one("h5.mt-3").get_text(" ", strip=True) if soup.select_one("h5.mt-3") else None,
+            title_el.get_text(" ", strip=True) if title_el else None,
             _meta(soup, prop="og:title"),
             soup.title.get_text(strip=True) if soup.title else None,
         )

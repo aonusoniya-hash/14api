@@ -369,11 +369,16 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         raw = urljoin(DEFAULT_BASE_SITE, raw.lstrip("/"))
     parsed = urlparse(raw)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    path = parsed.path or "/"
+    if path in ("/", "") and not query.get("category"):
+        path = "/v.php"
+        query.setdefault("category", "ori")
+        query.setdefault("viewtype", "basic")
     if page > 1:
         query["page"] = str(page)
     else:
         query.pop("page", None)
-    path = parsed.path or "/index.php"
+    path = path or "/index.php"
     return urlunparse((parsed.scheme or "https", parsed.netloc, path, "", urlencode(query), ""))
 
 

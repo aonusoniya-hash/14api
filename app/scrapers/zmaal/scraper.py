@@ -291,10 +291,13 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         raw = f"{BASE_SITE.rstrip('/')}/{raw.lstrip('/')}"
     parsed = urlparse(raw)
     page_num = max(1, int(page) if page else 1)
+    path = parsed.path or "/"
+    if path in ("/", ""):
+        path = "/latest"
 
     if page_num <= 1:
         return urlunparse(
-            (parsed.scheme or "https", parsed.netloc or SITE_HOST, parsed.path or "/", "", parsed.query, "")
+            (parsed.scheme or "https", parsed.netloc or SITE_HOST, path, "", parsed.query, "")
         )
 
     path = (parsed.path or "/").rstrip("/") or ""

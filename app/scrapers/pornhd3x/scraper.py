@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-BASE_SITE = "https://www9.pornhd3x.tv/"
+BASE_SITE = "https://www.pornhd3x.tv/"
 SITE_HOST = "pornhd3x.tv"
 SITE_ALIASES = frozenset(
     {
@@ -118,7 +118,7 @@ def _clean_title(title: str | None) -> Optional[str]:
 def _site_origin(url: str) -> str:
     parsed = urlparse(url)
     scheme = parsed.scheme or "https"
-    host = parsed.netloc or "www9.pornhd3x.tv"
+    host = parsed.netloc or "www.pornhd3x.tv"
     return f"{scheme}://{host}/"
 
 
@@ -151,7 +151,7 @@ def _normalize_video_href(href: str, *, base: str = BASE_SITE) -> Optional[str]:
     if len(parts) < 2 or parts[0] not in ("movies", "movie"):
         return None
     slug = parts[1]
-    host = parsed.netloc or urlparse(base).netloc or "www9.pornhd3x.tv"
+    host = parsed.netloc or urlparse(base).netloc or "www.pornhd3x.tv"
     return f"{parsed.scheme or 'https'}://{host}/movies/{slug}/"
 
 
@@ -441,7 +441,7 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     if parts and parts[-1].startswith("page-"):
         parts = parts[:-1]
 
-    host = parsed.netloc or "www9.pornhd3x.tv"
+    host = parsed.netloc or "www.pornhd3x.tv"
     scheme = parsed.scheme or "https"
 
     if not parts:

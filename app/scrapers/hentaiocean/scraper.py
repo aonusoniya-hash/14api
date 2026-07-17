@@ -364,7 +364,7 @@ def _resolve_list_api(base_url: str, page: int) -> tuple[dict[str, str], str] | 
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     page_num = max(1, int(page) if page else 1)
 
-    if path in ("view/recent-releases",):
+    if path in ("", "view/recent-releases"):
         return {"action": "recent"}, "slice"
     if path in ("view/newly-added",):
         return {"action": "new"}, "slice"

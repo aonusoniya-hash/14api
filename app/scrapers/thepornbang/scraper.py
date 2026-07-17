@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-BASE_SITE = "https://www.thepornbang.com/home36/"
+BASE_SITE = "https://www.thepornbang.com/"
 SITE_HOST = "thepornbang.com"
 SITE_ALIASES = frozenset({"thepornbang.com", "www.thepornbang.com"})
 
@@ -470,6 +470,9 @@ def _build_list_page_url(base_url: str, page: int) -> str:
 
     if parts and parts[-1].isdigit():
         parts = parts[:-1]
+
+    if not parts:
+        parts = ["home36"]
 
     if page_num <= 1:
         new_path = "/" + "/".join(parts) + ("/" if parts else "")

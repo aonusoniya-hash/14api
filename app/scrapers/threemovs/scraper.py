@@ -480,6 +480,9 @@ def _build_list_page_url(base_url: str, page: int) -> str:
     if parts and parts[-1].isdigit():
         parts = parts[:-1]
 
+    if not parts:
+        parts = ["latest-updates"]
+
     if page_num <= 1:
         new_path = "/" + "/".join(parts) + ("/" if parts else "")
     else:

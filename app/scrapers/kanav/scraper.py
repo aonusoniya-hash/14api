@@ -271,6 +271,8 @@ def _build_list_page_url(base_url: str, page: int) -> str:
             new_path = f"/index.php/vod/type/id/{type_id}.html"
         else:
             new_path = f"/index.php/vod/type/id/{type_id}/page/{page_num}.html"
+    elif path in ("/", "") and page_num <= 1:
+        new_path = "/index.php/vod/type/id/1.html"
     elif page_num <= 1:
         new_path = path if path.endswith(".html") or path == "/" else path.rstrip("/") + "/"
     else:

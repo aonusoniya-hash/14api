@@ -472,6 +472,8 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         return urlunparse((parsed.scheme, parsed.netloc, path, "", urlencode(pairs, doseq=True), ""))
 
     parts = [p for p in (parsed.path or "/").strip("/").split("/") if p]
+    if not parts:
+        parts = ["hp"]
     if parts and parts[-1].isdigit():
         parts = parts[:-1]
 
