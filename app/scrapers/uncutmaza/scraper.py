@@ -10,10 +10,16 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-# Live content is served on uncutmazaa.com. uncutmaza.com redirects to uncutmaza.cc which often
-# returns Cloudflare 403 for automated clients — rewrite those hosts to uncutmazaa.com for fetches.
-CANONICAL_HOST = "uncutmazaa.com"
-_REGISTRY_HOSTS = frozenset({"uncutmazaa.com", "uncutmaza.com", "uncutmaza.cc"})
+# Live content is served on uncutmaza.xxx. Legacy hosts rewrite to the canonical domain for fetches.
+CANONICAL_HOST = "uncutmaza.xxx"
+_REGISTRY_HOSTS = frozenset(
+    {
+        "uncutmaza.xxx",
+        "uncutmazaa.com",
+        "uncutmaza.com",
+        "uncutmaza.cc",
+    }
+)
 
 
 def _registry_host(netloc: str) -> str:
@@ -32,11 +38,11 @@ def _rewrite_to_canonical_fetch_url(url: str) -> str:
         raw = "https://" + raw.lstrip("/")
     parsed = urlparse(raw)
     rh = _registry_host(parsed.netloc)
-    if rh in ("uncutmaza.com", "uncutmaza.cc"):
+    if rh in _REGISTRY_HOSTS and rh != CANONICAL_HOST:
         return urlunparse(
             ("https", CANONICAL_HOST, parsed.path or "/", parsed.params, parsed.query, parsed.fragment)
         )
-    if rh == "uncutmazaa.com":
+    if rh == CANONICAL_HOST:
         return urlunparse(
             ("https", CANONICAL_HOST, parsed.path or "/", parsed.params, parsed.query, parsed.fragment)
         )

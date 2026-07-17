@@ -475,6 +475,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "uncutmaza.com" in parsed_url.netloc.lower() or
         "uncutmazaa.com" in parsed_url.netloc.lower() or
         "uncutmaza.cc" in parsed_url.netloc.lower() or
+        "uncutmaza.xxx" in parsed_url.netloc.lower() or
         "mydesimms.watch" in parsed_url.netloc.lower() or
         "85po.com" in parsed_url.netloc.lower() or
         "cosxplay.com" in parsed_url.netloc.lower() or
@@ -506,6 +507,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "uncutmasti.com" in parsed_url.netloc.lower() or
         "ixifile.xyz" in parsed_url.netloc.lower() or
         "zmaal.net" in parsed_url.netloc.lower() or
+        "ulluwebseries.me" in parsed_url.netloc.lower() or
+        "cdn.ulluwebseries.me" in parsed_url.netloc.lower() or
         "ulluwebseries.one" in parsed_url.netloc.lower() or
         "cdn.ulluwebseries.one" in parsed_url.netloc.lower() or
         "desithothub.com" in parsed_url.netloc.lower() or
@@ -630,6 +633,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "uncutmaza.com" in host_l
             or "uncutmazaa.com" in host_l
             or "uncutmaza.cc" in host_l
+            or "uncutmaza.xxx" in host_l
             or "mydesimms.watch" in host_l
             or "85po.com" in host_l
             or "cosxplay.com" in host_l
@@ -663,6 +667,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "uncutmasti.com" in host_l
             or "ixifile.xyz" in host_l
             or "zmaal.net" in host_l
+            or "ulluwebseries.me" in host_l
+            or "cdn.ulluwebseries.me" in host_l
             or "ulluwebseries.one" in host_l
             or "cdn.ulluwebseries.one" in host_l
             or "desithothub.com" in host_l

@@ -11,12 +11,19 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-BASE_SITE = "https://ulluwebseries.one/"
-SITE_HOST = "ulluwebseries.one"
-SITE_ALIASES = frozenset({"ulluwebseries.one", "www.ulluwebseries.one"})
+BASE_SITE = "https://ulluwebseries.me/"
+SITE_HOST = "ulluwebseries.me"
+SITE_ALIASES = frozenset(
+    {
+        "ulluwebseries.me",
+        "www.ulluwebseries.me",
+        "ulluwebseries.one",
+        "www.ulluwebseries.one",
+    }
+)
 
 _POST_PAGE_RE = re.compile(
-    r"^https?://(?:www\.)?ulluwebseries\.one/hot-series/(?P<slug>[a-z0-9][a-z0-9-]*)/?$",
+    r"^https?://(?:www\.)?ulluwebseries\.(?:me|one)/hot-series/(?P<slug>[a-z0-9][a-z0-9-]*)/?$",
     re.IGNORECASE,
 )
 _MP4_RE = re.compile(
@@ -33,7 +40,7 @@ def can_handle(host: str) -> bool:
     h = (host or "").lower().split(":")[0]
     if h.startswith("www."):
         h = h[4:]
-    return h in SITE_ALIASES or h.endswith(".ulluwebseries.one")
+    return h in SITE_ALIASES or h.endswith(".ulluwebseries.me") or h.endswith(".ulluwebseries.one")
 
 
 def get_categories() -> list[dict]:
@@ -85,6 +92,8 @@ def _clean_title(title: str | None) -> Optional[str]:
         " - Ullu Web Series",
         " | Ullu Web Series",
         " Ullu Web Series",
+        " - ulluwebseries.me",
+        " | ulluwebseries.me",
         " - ulluwebseries.one",
         " | ulluwebseries.one",
         " HD",
@@ -97,6 +106,11 @@ def _clean_title(title: str | None) -> Optional[str]:
     if t.count("Ullu Web Series") > 1:
         t = t.replace("Ullu Web Series", "", 1).strip()
     return t or None
+
+
+def _is_site_host(host: str) -> bool:
+    h = (host or "").lower().replace("www.", "")
+    return h in SITE_ALIASES or h.endswith(".ulluwebseries.me") or h.endswith(".ulluwebseries.one")
 
 
 def _normalize_post_href(href: str) -> Optional[str]:
@@ -112,14 +126,15 @@ def _normalize_post_href(href: str) -> Optional[str]:
     href = href.split("#", 1)[0].split("?", 1)[0]
     parsed = urlparse(href)
     host = (parsed.netloc or "").lower().replace("www.", "")
-    if host != SITE_HOST:
+    if not _is_site_host(host):
         return None
     if any(x in (parsed.path or "").lower() for x in ("/wp-content/", "/wp-admin/", "/wp-json/")):
         return None
     canon = href if href.endswith("/") else href + "/"
-    if not _POST_PAGE_RE.match(canon):
+    match = _POST_PAGE_RE.match(canon)
+    if not match:
         return None
-    return canon
+    return f"https://{SITE_HOST}/hot-series/{match.group('slug')}/"
 
 
 def _best_image_url(img: Any) -> Optional[str]:
