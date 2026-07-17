@@ -1091,7 +1091,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://animeidhentai.com/search?q={query}",
         sourceId="animeidhentai",
-        disable=True,
+        disable=False,
         pageSize=28,
     ),
     ExploreSourceResponse(
