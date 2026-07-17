@@ -35,6 +35,10 @@ _EPISODE_SLUG_RE = re.compile(
     r"^/series/(?P<slug>[a-z0-9-]+-episode-\d+)/?$",
     re.IGNORECASE,
 )
+_EPISODE_PAGE_RE = re.compile(
+    r"^/(?P<wp_id>\d+)/(?P<slug>[a-z0-9-]+(?:-episode-\d+)?)/?$",
+    re.IGNORECASE,
+)
 _NHPLAYER_DATA_ID_RE = re.compile(r'data-id="([^"]+)"', re.IGNORECASE)
 
 
@@ -114,8 +118,16 @@ def _series_url(title_slug: str) -> str:
     return f"https://{SITE_HOST}/series/{title_slug.strip('/')}"
 
 
-def _series_url_with_ep(title_slug: str, ep: int) -> str:
-    return f"{_series_url(title_slug)}?ep={int(ep)}"
+def _episode_page_url(item: dict[str, Any]) -> Optional[str]:
+    wp_id = item.get("wpId")
+    slug = str(item.get("slug") or "").strip()
+    if wp_id and slug:
+        return f"https://{SITE_HOST}/{int(wp_id)}/{slug}"
+    title_slug = str(item.get("titleSlug") or "").strip()
+    ep = int(item.get("ep") or 1)
+    if title_slug:
+        return f"{_series_url(title_slug)}?ep={ep}"
+    return None
 
 
 def _normalize_html_payload(html: str) -> str:
@@ -153,9 +165,20 @@ def _episode_display_title(item: dict[str, Any]) -> str:
     return base
 
 
-def _parse_requested_episode(url: str) -> tuple[Optional[str], Optional[int]]:
+def _parse_requested_episode(
+    url: str,
+) -> tuple[Optional[str], Optional[int], Optional[int], Optional[str]]:
     parsed = urlparse(url.strip())
     path = (parsed.path or "").rstrip("/") + "/"
+
+    m = _EPISODE_PAGE_RE.match(path)
+    if m:
+        slug = m.group("slug")
+        wp_id = int(m.group("wp_id"))
+        ep_m = re.search(r"-episode-(\d+)$", slug, re.I)
+        title_slug = slug[: ep_m.start()] if ep_m else slug
+        ep = int(ep_m.group(1)) if ep_m else None
+        return title_slug, ep, wp_id, slug
 
     m = _EPISODE_SLUG_RE.match(path)
     if m:
@@ -163,7 +186,7 @@ def _parse_requested_episode(url: str) -> tuple[Optional[str], Optional[int]]:
         ep_m = re.search(r"-episode-(\d+)$", slug, re.I)
         title_slug = slug[: ep_m.start()] if ep_m else slug
         ep = int(ep_m.group(1)) if ep_m else None
-        return title_slug, ep
+        return title_slug, ep, None, slug
 
     m = _SERIES_PAGE_RE.match(path)
     if m:
@@ -171,13 +194,13 @@ def _parse_requested_episode(url: str) -> tuple[Optional[str], Optional[int]]:
         if "-episode-" in title_slug:
             ep_m = re.search(r"-episode-(\d+)$", title_slug, re.I)
             if ep_m:
-                return title_slug[: ep_m.start()], int(ep_m.group(1))
+                return title_slug[: ep_m.start()], int(ep_m.group(1)), None, title_slug
         qs = parse_qs(parsed.query or "")
         ep_raw = (qs.get("ep") or [None])[0]
         ep = int(ep_raw) if ep_raw and str(ep_raw).isdigit() else None
-        return title_slug, ep
+        return title_slug, ep, None, None
 
-    return None, None
+    return None, None, None, None
 
 
 async def _fetch_with_curl_cffi(url: str, *, referer: str | None = None) -> str:
@@ -262,7 +285,23 @@ async def _resolve_streams_from_embed(embed_url: str) -> dict[str, Any]:
     }
 
 
-def _pick_episode(episodes: list[dict[str, Any]], *, title_slug: str, ep: Optional[int]) -> dict[str, Any]:
+def _pick_episode(
+    episodes: list[dict[str, Any]],
+    *,
+    title_slug: str,
+    ep: Optional[int],
+    wp_id: Optional[int] = None,
+    slug: Optional[str] = None,
+) -> dict[str, Any]:
+    if wp_id is not None:
+        for item in episodes:
+            if int(item.get("wpId") or 0) == wp_id:
+                return item
+    if slug:
+        for item in episodes:
+            if str(item.get("slug") or "") == slug:
+                return item
+
     scoped = [e for e in episodes if str(e.get("titleSlug") or "") == title_slug]
     if not scoped:
         scoped = episodes
@@ -280,9 +319,7 @@ def _pick_episode(episodes: list[dict[str, Any]], *, title_slug: str, ep: Option
 
 
 def _episode_to_list_item(item: dict[str, Any]) -> dict[str, Any]:
-    title_slug = str(item.get("titleSlug") or "").strip()
-    ep = int(item.get("ep") or 1)
-    page_url = _series_url_with_ep(title_slug, ep) if title_slug else BASE_SITE
+    page_url = _episode_page_url(item) or BASE_SITE
     return {
         "url": page_url,
         "title": _episode_display_title(item),
@@ -296,9 +333,7 @@ def _episode_to_list_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _episode_to_scrape(item: dict[str, Any], url: str, *, video: dict[str, Any]) -> dict[str, Any]:
-    title_slug = str(item.get("titleSlug") or "").strip()
-    ep = int(item.get("ep") or 1)
-    page_url = _series_url_with_ep(title_slug, ep) if title_slug else url
+    page_url = _episode_page_url(item) or url
     tags = item.get("tags") if isinstance(item.get("tags"), list) else []
     return {
         "url": page_url,
@@ -337,17 +372,27 @@ def _build_list_page_url(base_url: str, page: int) -> str:
 
 
 async def scrape(url: str) -> dict[str, Any]:
-    title_slug, ep = _parse_requested_episode(url)
-    if not title_slug:
+    title_slug, ep, wp_id, slug = _parse_requested_episode(url)
+    if not title_slug and not (wp_id and slug):
         raise ValueError(f"Unsupported AnimeIDHentai URL: {url}")
 
-    series_url = _series_url(title_slug)
-    html = await fetch_page(series_url, referer=BASE_SITE)
+    if wp_id and slug:
+        fetch_url = f"https://{SITE_HOST}/{wp_id}/{slug}"
+    else:
+        fetch_url = _series_url(title_slug or "")
+
+    html = await fetch_page(fetch_url, referer=BASE_SITE)
     episodes = _extract_episode_objects(html)
     if not episodes:
-        raise ValueError(f"No episode data found for: {series_url}")
+        raise ValueError(f"No episode data found for: {fetch_url}")
 
-    episode = _pick_episode(episodes, title_slug=title_slug, ep=ep)
+    episode = _pick_episode(
+        episodes,
+        title_slug=title_slug or "",
+        ep=ep,
+        wp_id=wp_id,
+        slug=slug,
+    )
     embed_url = _first_non_empty(episode.get("embedUrl"))
     if not embed_url:
         raise ValueError(f"No embed URL found for episode: {episode.get('slug')}")
