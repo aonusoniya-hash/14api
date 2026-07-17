@@ -13,6 +13,8 @@ class ExploreSourceResponse(BaseModel):
     sourceId: str
     disable: bool = False
     pageSize: int = 20
+    hasRelatedVideos: bool = False
+    relatedAsEpisodes: bool = False
 
 class ExploreCategoryResponse(BaseModel):
     id: str

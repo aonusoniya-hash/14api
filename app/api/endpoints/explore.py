@@ -1,7 +1,66 @@
+import re
+from typing import Any, Optional
+from urllib.parse import urlparse
+
 from fastapi import APIRouter
 from app.models.explore_models import ExploreConfigResponse, ExploreConfigData, ExploreCategoryResponse, ExploreSourceResponse
 
 router = APIRouter()
+
+
+def _source_host(source: ExploreSourceResponse) -> str:
+    return urlparse(source.baseUrl).netloc.lower().removeprefix("www.")
+
+
+def find_explore_source_by_url(url: str) -> Optional[ExploreSourceResponse]:
+    """Resolve an explore source from a video/page URL host."""
+    host = urlparse(url).netloc.lower().removeprefix("www.")
+    if not host:
+        return None
+
+    best: Optional[ExploreSourceResponse] = None
+    best_host_len = -1
+    for source in EXPLORE_SOURCES:
+        source_host = _source_host(source)
+        if not source_host:
+            continue
+        if host == source_host or host.endswith(f".{source_host}"):
+            if len(source_host) > best_host_len:
+                best = source
+                best_host_len = len(source_host)
+    return best
+
+
+def normalize_related_cache_url(url: str, source: ExploreSourceResponse) -> str:
+    """Normalize a video URL for related-list cache keys."""
+    if source.sourceId == "haho":
+        base_match = re.search(r"https?://haho\.moe/anime/([^/]+)", url)
+        if base_match:
+            return f"https://haho.moe/anime/{base_match.group(1)}"
+    return url
+
+
+async def fetch_related_videos(url: str, *, api_base_url: str) -> list[dict[str, Any]]:
+    """Fetch related videos when enabled for the source in explore config."""
+    from app.models.schemas import ListItem
+    from app.services.video_streaming import get_video_info
+
+    source = find_explore_source_by_url(url)
+    if source is None or not source.hasRelatedVideos:
+        return []
+
+    related: list[dict[str, Any]] = []
+    if source.sourceId == "haho":
+        base_match = re.search(r"https?://haho\.moe/anime/([^/]+)", url)
+        if base_match:
+            from app.scrapers.haho.scraper import get_episode_list
+
+            related = await get_episode_list(base_match.group(1))
+    else:
+        info = await get_video_info(url, api_base_url=api_base_url)
+        related = info.get("related_videos", [])
+
+    return [ListItem(**it).model_dump(exclude_none=True) for it in related]
 
 # Default Explore Categories
 EXPLORE_CATEGORIES = [
@@ -1041,6 +1100,8 @@ EXPLORE_SOURCES = [
         sourceId="haho",
         disable=False,
         pageSize=36,
+        hasRelatedVideos=True,
+        relatedAsEpisodes=True,
     ),
     ExploreSourceResponse(
         baseUrl="https://hanime.tv/",
@@ -1236,6 +1297,8 @@ EXPLORE_SOURCES = [
         sourceId="oppai",
         disable=False,
         pageSize=36,
+        hasRelatedVideos=True,
+        relatedAsEpisodes=True,
     ),
     ExploreSourceResponse(
         baseUrl="https://xmoviesforyou.com/",

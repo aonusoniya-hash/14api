@@ -605,21 +605,20 @@ async def direct_stream_endpoint(
 async def related_videos_endpoint(request: Request, url: str = Query(..., description="Video page URL")):
     """
     Returns related videos (episodes) for a given video URL.
+    Enabled per source via explore config (hasRelatedVideos).
     """
     from app.core import cache
-    
-    # Normalize URL to base series URL for better cache sharing across episodes
-    import re
-    normalized_url = url
-    series_id = None
-    is_haho = "haho.moe/anime/" in url
-    if is_haho:
-        base_match = re.search(r"https?://haho\.moe/anime/([^/]+)", url)
-        if base_match:
-            series_id = base_match.group(1)
-            normalized_url = f"https://haho.moe/anime/{series_id}"
-            
-    # Check cache first (shared key for all episodes of the same series)
+    from app.api.endpoints.explore import (
+        find_explore_source_by_url,
+        normalize_related_cache_url,
+        fetch_related_videos,
+    )
+
+    source = find_explore_source_by_url(url)
+    if source is None or not source.hasRelatedVideos:
+        return []
+
+    normalized_url = normalize_related_cache_url(url, source)
     cache_key = f"related_videos:{normalized_url}"
     cached_data = await cache.get(cache_key)
     if cached_data:
@@ -628,24 +627,9 @@ async def related_videos_endpoint(request: Request, url: str = Query(..., descri
     from app.config.settings import settings
     api_base = settings.BASE_URL or str(request.base_url)
     try:
-        related = []
-        
-        # Fast path: for Haho, call the lightweight get_episode_list directly
-        # (1 network fetch vs. 2 in the full get_video_info path)
-        if is_haho and series_id:
-            from app.scrapers.haho.scraper import get_episode_list
-            related = await get_episode_list(series_id)
-        else:
-            from app.services.video_streaming import get_video_info
-            info = await get_video_info(url, api_base_url=api_base)
-            related = info.get("related_videos", [])
-        
-        result = [ListItem(**it).model_dump(exclude_none=True) for it in related]
-        
-        # Cache the result for 1 hour (3600 seconds) if it's not empty
+        result = await fetch_related_videos(url, api_base_url=api_base)
         if result:
             await cache.set(cache_key, result, ttl_seconds=3600)
-            
         return result
     except HTTPException:
         raise
