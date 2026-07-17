@@ -1,5 +1,4 @@
 [
-  { "name": "Home", "url": "https://hanime1.me/", "video_count": 0 },
   { "name": "Latest Releases", "url": "https://hanime1.me/search?sort=%E6%9C%80%E6%96%B0%E4%B8%8A%E5%B8%82", "video_count": 0 },
   { "name": "Latest Uploads", "url": "https://hanime1.me/search?sort=%E6%9C%80%E6%96%B0%E4%B8%8A%E5%82%B3", "video_count": 0 },
   { "name": "Trending", "url": "https://hanime1.me/search?sort=%E4%BB%96%E5%80%91%E5%9C%A8%E7%9C%8B", "video_count": 0 },

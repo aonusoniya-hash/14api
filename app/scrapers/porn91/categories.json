@@ -1,5 +1,4 @@
 [
-  { "id": "home", "name": "Home", "url": "https://0511.sp2026.dev/index.php" },
   { "id": "ori", "name": "91 Original", "url": "https://0511.sp2026.dev/v.php?category=ori&viewtype=basic" },
   { "id": "hot", "name": "Hot", "url": "https://0511.sp2026.dev/v.php?category=hot&viewtype=basic" },
   { "id": "top", "name": "Top This Month", "url": "https://0511.sp2026.dev/v.php?category=top&viewtype=basic" },
