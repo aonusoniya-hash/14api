@@ -11,11 +11,17 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
+BASE_SITE = "https://www.kamababa1.com/"
+
 
 def can_handle(host: str) -> bool:
     h = (host or "").lower()
-    # Updated to handle the new x-suffixed domain
-    return h == "kamababax.com" or h.endswith(".kamababax.com")
+    return (
+        h == "kamababa1.com"
+        or h.endswith(".kamababa1.com")
+        or h == "kamababax.com"
+        or h.endswith(".kamababax.com")
+    )
 
 
 def get_categories() -> list[dict]:
@@ -33,7 +39,7 @@ async def fetch_page(url: str) -> str:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.kamababax.com/",
+        "Referer": BASE_SITE,
     }
     return await pool_fetch_html(url, headers=headers)
 
@@ -212,12 +218,12 @@ def _normalize_video_href(href: str) -> Optional[str]:
     if href.startswith("//"):
         href = f"https:{href}"
     elif href.startswith("/"):
-        href = f"https://www.kamababax.com{href}"
+        href = f"https://www.kamababa1.com{href}"
     if not href.startswith("http"):
         return None
 
     parsed = urlparse(href)
-    if "kamababax.com" not in parsed.netloc.lower():
+    if "kamababa1.com" not in parsed.netloc.lower() and "kamababax.com" not in parsed.netloc.lower():
         return None
     if any(
         x in parsed.path.lower()
@@ -232,7 +238,7 @@ def _normalize_video_href(href: str) -> Optional[str]:
     if not _is_probable_video_post(parsed):
         return None
     slug = parsed.path.strip("/").split("/", 1)[0]
-    return urlunparse(("https", "www.kamababax.com", f"/{slug}/", "", "", ""))
+    return urlunparse(("https", "www.kamababa1.com", f"/{slug}/", "", "", ""))
 
 
 def _extract_inline_urls(html: str) -> list[str]:
@@ -267,7 +273,7 @@ def _candidate_url_score(stream_url: str, slug_tokens: set[str]) -> tuple[int, i
     return (cdn_score + min(token_hits, 3), token_hits)
 
 
-def _normalize_media_url(src: str, base: str = "https://www.kamababax.com/") -> Optional[str]:
+def _normalize_media_url(src: str, base: str = BASE_SITE) -> Optional[str]:
     u = (src or "").strip()
     if not u:
         return None
@@ -394,11 +400,12 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
     json_ld = _parse_json_ld(soup)
 
+    h1 = soup.select_one("h1")
     title = _clean_title(
         _first_non_empty(
             _meta(soup, prop="og:title"),
             _meta(soup, name="twitter:title"),
-            soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else None,
+            h1.get_text(" ", strip=True) if h1 is not None else None,
             soup.title.get_text(strip=True) if soup.title else None,
         )
     ) or "Unknown Video"
@@ -413,7 +420,13 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
             if "interactionCount" in graph:
                 ld_views = _extract_views_text(str(graph["interactionCount"]))
             elif graph.get("interactionStatistic"):
-                stats = _as_list(graph["interactionStatistic"])
+                raw_stats = graph["interactionStatistic"]
+                if isinstance(raw_stats, dict):
+                    stats: list[Any] = [raw_stats]
+                elif isinstance(raw_stats, list):
+                    stats = raw_stats
+                else:
+                    stats = []
                 for stat in stats:
                     if isinstance(stat, dict) and "userInteractionCount" in stat:
                         ld_views = _clean_views_text(str(stat["userInteractionCount"]))
@@ -456,7 +469,7 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         raw = "https://" + raw.lstrip("/")
     parsed = urlparse(raw)
     scheme = parsed.scheme or "https"
-    netloc = parsed.netloc or "www.kamababax.com"
+    netloc = parsed.netloc or "www.kamababa1.com"
     path = parsed.path or "/"
     query_items = dict(parse_qsl(parsed.query, keep_blank_values=True))
 

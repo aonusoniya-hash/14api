@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-BASE_SITE = "https://spankbang.com/"
+BASE_SITE = "https://spankbang.party/"
 _DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
@@ -28,7 +28,8 @@ _CURL_IMPERSONATIONS = ("safari17_0", "safari15_5", "chrome120", "chrome110")
 
 
 def can_handle(host: str) -> bool:
-    return "spankbang.com" in host.lower()
+    h = host.lower()
+    return "spankbang.party" in h or "spankbang.com" in h
 
 
 def get_categories() -> list[dict]:
@@ -265,15 +266,15 @@ async def scrape(url: str) -> dict[str, Any]:
     return parse_page(html, url)
 
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
-    # Pagination: spankbang.com/upcoming/2
+    # Pagination: spankbang.party/upcoming/2
     
     url = base_url
     
     # Spankbang standard: /2 for page 2
     if page > 1:
         url = base_url.rstrip("/")
-        if url == "https://spankbang.com":
-             url = "https://spankbang.com/trending_videos"
+        if url in ("https://spankbang.party", "https://spankbang.com"):
+             url = f"{BASE_SITE.rstrip('/')}/trending_videos"
         elif "/s/" in url:
              # Ensure /s/ URLs keep structure: /s/query/page
              # If url was .../s/amateur, make it .../s/amateur/2
@@ -311,7 +312,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             href = link.get("href")
             if not href: continue
              
-            if href.startswith("/"): href = "https://spankbang.com" + href
+            if href.startswith("/"): href = BASE_SITE.rstrip("/") + href
             
             # Title: Improved selector to avoid matching hashtags/channels
             title = "Unknown"
