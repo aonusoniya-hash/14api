@@ -1,11 +1,11 @@
 # AppHub Version Configuration
 # Update this file when you release a new version of AppHub
 
-VERSION = "12.0.0"
-BUILD_NUMBER = 12
+VERSION = "13.0.0"
+BUILD_NUMBER = 13
 # Force all builds older than the current release to update.
 MIN_SUPPORTED_BUILD = BUILD_NUMBER
-RELEASE_DATE = "2026-06-28"
+RELEASE_DATE = "2026-07-23"
 
 # File Information
 DOWNLOAD_URLS = {
@@ -16,8 +16,8 @@ DOWNLOAD_URLS = {
     "universal": ""
 }
 DOWNLOAD_SIZES = {
-    "arm64-v8a": 32000000,
-    "armeabi-v7a": 37000000,
+    "arm64-v8a": 30000000,
+    "armeabi-v7a": 35000000,
     "x86": 23000000,
     "x86_64": 23000000,
     "universal": 40000000
@@ -33,17 +33,14 @@ IS_MANDATORY = False  # If True, prompts an update regardless of MIN_SUPPORTED_B
 TELEGRAM_CHANNEL = "https://t.me/+IDEuHZyD9lc5Y2Jl"
 
 # Changelog Details
-CHANGELOG_TITLE = "🎉 What's New in v12.0.0"
+CHANGELOG_TITLE = "🎉 What's New in v13.0.0"
 CHANGELOG = """
 ✨ Major Features
 • Reduced app size.
-• Added 11+ adult website support.
-• Cache set to 1 hour.
-• Removed non-working playlists.
-• Removed storage permission for Android 13+.
+• Cache Removed.
+• Ads Removed.
 
 🛠️ Bug Fixes & Enhancements
-• Fixed m3u8 downloader.
 • Fixed previous bugs.
 • Many more not on the list
 """
