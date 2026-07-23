@@ -1,5 +1,4 @@
 [
-  { "id": "home", "name": "Home", "url": "https://leslez.com/" },
   { "id": "new", "name": "New Videos", "url": "https://leslez.com/new/" },
   { "id": "best", "name": "Best Videos", "url": "https://leslez.com/best/" },
   { "id": "random", "name": "Random", "url": "https://leslez.com/random/" },
