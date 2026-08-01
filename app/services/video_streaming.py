@@ -434,6 +434,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "krakenfiles.com" in parsed_url.netloc.lower() or
         "krakencloud.net" in parsed_url.netloc.lower() or
         "luluvdo.com" in parsed_url.netloc.lower() or
+        "gupload.xyz" in parsed_url.netloc.lower() or
         "edge.tmncdn.io" in parsed_url.netloc.lower() or
         "hentaiocean.com" in parsed_url.netloc.lower() or
         "w1.hentaiocean.com" in parsed_url.netloc.lower() or
@@ -594,6 +595,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "krakenfiles.com" in host_l
             or "krakencloud.net" in host_l
             or "luluvdo.com" in host_l
+            or "gupload.xyz" in host_l
             or "edge.tmncdn.io" in host_l
             or "hentaiocean.com" in host_l
             or "w1.hentaiocean.com" in host_l

@@ -21,6 +21,7 @@ STREAM_HOSTS = frozenset(
         "krakencloud.net",
         "luluvdo.com",
         "lulucdn.com",
+        "gupload.xyz",
     }
 )
 
@@ -51,9 +52,13 @@ _NON_VIDEO_SLUGS = frozenset(
         "cat",
         "dmca",
         "embed",
+        "brand",
         "feed",
+        "games",
+        "genre",
         "go",
         "index",
+        "login",
         "out",
         "page",
         "pop",
@@ -79,10 +84,17 @@ _KRAKEN_EMBED_RE = re.compile(
     re.IGNORECASE,
 )
 _LULU_EMBED_RE = re.compile(
-    r"""https?://luluvdo\.com/embed/[A-Za-z0-9]+""",
+    r"""https?://luluvdo\.com/(?:embed|e)/[A-Za-z0-9]+""",
     re.IGNORECASE,
 )
-_DISQUS_URL_RE = re.compile(r"""var\s+disqus_url\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
+_GUPLOAD_EMBED_RE = re.compile(
+    r"""https?://gupload\.xyz/data/e/[A-Za-z0-9?=&-]+""",
+    re.IGNORECASE,
+)
+_DISQUS_URL_RE = re.compile(
+    r"""(?:var\s+disqus_url\s*=\s*['"]([^'"]+)['"]|this\.page\.url\s*=\s*['"]([^'"]+)['"])""",
+    re.IGNORECASE,
+)
 
 
 def can_handle(host: str) -> bool:
@@ -260,6 +272,7 @@ def _format_variant_label(variant: str) -> str:
 _MIRROR_LABELS = {
     "krakenfiles": "Krakenfiles",
     "lulustream": "Lulustream",
+    "zoplayer": "ZoPlayer",
 }
 
 
@@ -272,6 +285,48 @@ def _stream_quality_label(variant: str, mirror: str) -> str:
 
 def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
+
+    for ep_body in soup.select(".ep-body"):
+        vtype = ""
+        subs_meta = ""
+        for child in ep_body.find_all(recursive=False):
+            classes = child.get("class") or []
+            if "variant-header" in classes:
+                label_el = child.select_one(".variant-label")
+                vtype = _strip_emoji(label_el.get_text(" ", strip=True) if label_el else "")
+            elif "variant-meta" in classes:
+                subs_meta = ""
+                for item in child.select(".meta-item"):
+                    label = item.select_one(".meta-label")
+                    value = item.select_one(".meta-value")
+                    if not label or not value:
+                        continue
+                    if "subs" in label.get_text(strip=True).lower():
+                        subs_meta = value.get_text(" ", strip=True)
+            elif "variant-actions" in classes:
+                stream_url = None
+                for item in child.select(".actions-item"):
+                    label = item.select_one(".actions-label")
+                    if not label or "stream" not in label.get_text(strip=True).lower():
+                        continue
+                    stream_el = item.select_one("a.actions-value[href]")
+                    if stream_el:
+                        stream_url = _normalize_media_url(stream_el.get("href"))
+                if stream_url:
+                    cards.append(
+                        {
+                            "vtype": vtype,
+                            "subs_meta": _strip_emoji(subs_meta),
+                            "stream_url": stream_url,
+                        }
+                    )
+                vtype = ""
+                subs_meta = ""
+
+    if cards:
+        return cards
+
+    # Legacy bs3 layout fallback
     for card in soup.select(".ep2-card"):
         vtype_el = card.select_one(".ep2-vtype")
         vtype = _strip_emoji(vtype_el.get_text(" ", strip=True) if vtype_el else "")
@@ -287,26 +342,45 @@ def _parse_episode_cards(soup: BeautifulSoup) -> list[dict[str, Any]]:
 
         stream_el = card.select_one("a.ep2-stream[href]")
         stream_url = _normalize_media_url(stream_el.get("href")) if stream_el else None
-
-        cards.append(
-            {
-                "vtype": vtype,
-                "subs_meta": _strip_emoji(subs_meta),
-                "stream_url": stream_url,
-            }
-        )
+        if stream_url:
+            cards.append(
+                {
+                    "vtype": vtype,
+                    "subs_meta": _strip_emoji(subs_meta),
+                    "stream_url": stream_url,
+                }
+            )
     return cards
 
 
 def _extract_embed_urls(page_html: str) -> dict[str, str]:
     html = page_html or ""
-    kraken = _KRAKEN_EMBED_RE.search(html)
-    lulu = _LULU_EMBED_RE.search(html)
     out: dict[str, str] = {}
+
+    kraken = _KRAKEN_EMBED_RE.search(html)
     if kraken:
         out["krakenfiles"] = kraken.group(0).strip().replace("\\/", "/")
+
+    lulu = _LULU_EMBED_RE.search(html)
     if lulu:
         out["lulustream"] = lulu.group(0).strip().replace("\\/", "/")
+
+    gupload = _GUPLOAD_EMBED_RE.search(html)
+    if gupload:
+        out["zoplayer"] = gupload.group(0).strip().replace("\\/", "/")
+
+    soup = BeautifulSoup(html, "lxml")
+    for iframe in soup.select("iframe[src]"):
+        src = _normalize_media_url(iframe.get("src"))
+        if not src:
+            continue
+        host = (urlparse(src).netloc or "").lower()
+        if "krakenfiles.com" in host and "krakenfiles" not in out:
+            out["krakenfiles"] = src
+        elif "luluvdo.com" in host and "lulustream" not in out:
+            out["lulustream"] = src
+        elif "gupload.xyz" in host and "zoplayer" not in out:
+            out["zoplayer"] = src
     return out
 
 
@@ -395,7 +469,11 @@ def _streams_from_card_variants(
         if not watch_url:
             continue
         embeds = embeds_by_watch.get(str(watch_url), {})
-        for mirror_key, mirror_name in (("krakenfiles", "krakenfiles"), ("lulustream", "lulustream")):
+        for mirror_key, mirror_name in (
+            ("zoplayer", "zoplayer"),
+            ("krakenfiles", "krakenfiles"),
+            ("lulustream", "lulustream"),
+        ):
             embed_url = embeds.get(mirror_key)
             if not embed_url or embed_url in seen:
                 continue
@@ -458,7 +536,7 @@ async def _streams_from_watch_page(
     parent_url = None
     match = _DISQUS_URL_RE.search(watch_html or "")
     if match:
-        parent_url = match.group(1).strip()
+        parent_url = _first_non_empty(match.group(1), match.group(2))
     if not parent_url:
         parent_url = await _resolve_parent_url_from_watch(watch_url, referer=referer)
 
@@ -480,7 +558,11 @@ async def _streams_from_watch_page(
     streams: list[dict[str, str]] = []
     seen: set[str] = set()
     fallback_prefix = "japanese raw"
-    for mirror_key, mirror_name in (("krakenfiles", "krakenfiles"), ("lulustream", "lulustream")):
+    for mirror_key, mirror_name in (
+        ("zoplayer", "zoplayer"),
+        ("krakenfiles", "krakenfiles"),
+        ("lulustream", "lulustream"),
+    ):
         embed_url = embeds.get(mirror_key)
         if not embed_url or embed_url in seen:
             continue
@@ -524,10 +606,10 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    for block in soup.select("article.data-block"):
+    for block in soup.select("article.post-card, article.data-block"):
         if len(items) >= limit:
             break
-        link = block.select_one(".article-header h2 a[href], .article-section a[href]")
+        link = block.select_one("a.flex-col[href], .article-header h2 a[href], .article-section a[href]")
         if not link:
             continue
         url = _normalize_video_href(link.get("href") or "")
@@ -536,8 +618,10 @@ def _parse_list_items(soup: BeautifulSoup, *, limit: int) -> list[dict[str, Any]
         seen.add(url)
 
         img = block.select_one("img")
+        title_el = block.select_one("h3, h2")
         title = _clean_title(
             _first_non_empty(
+                title_el.get_text(strip=True) if title_el else None,
                 link.get_text(strip=True),
                 img.get("title") if img else None,
                 img.get("alt") if img else None,
@@ -633,6 +717,9 @@ def parse_video_page(
 
     title = _clean_title(
         _first_non_empty(
+            soup.select_one(".section-header h2").get_text(strip=True)
+            if soup.select_one(".section-header h2")
+            else None,
             soup.select_one("h1").get_text(strip=True) if soup.select_one("h1") else None,
             _meta(soup, prop="og:title"),
             soup.title.get_text(strip=True) if soup.title else None,
@@ -641,6 +728,9 @@ def parse_video_page(
 
     thumbnail = _first_non_empty(
         _meta(soup, prop="og:image"),
+        _normalize_media_url(soup.select_one(".post-sidebar img").get("src"))
+        if soup.select_one(".post-sidebar img")
+        else None,
         _normalize_media_url(
             soup.select_one(".content-head img.img-responsive, .content-box img.img-responsive").get("src")
         )
@@ -649,29 +739,32 @@ def parse_video_page(
     )
 
     description = _first_non_empty(
+        " ".join(p.get_text(" ", strip=True) for p in soup.select(".row-desc p")).strip()
+        if soup.select(".row-desc p")
+        else None,
         _meta(soup, prop="og:description"),
         _meta(soup, name="description"),
     )
 
     tags: list[str] = []
-    for a in soup.select('a[href*="/tag/"]'):
+    for a in soup.select('a[href*="/genre/"], a[href*="/tag/"]'):
         tag = a.get_text(strip=True)
         if tag and tag not in tags:
             tags.append(tag)
 
     category: Optional[str] = None
-    for a in soup.select('a[href*="/cat/brand/"]'):
+    for a in soup.select('a[href*="/brand/"], a[href*="/cat/brand/"]'):
         label = a.get_text(strip=True)
         if label:
             category = label
             break
 
     upload_date: Optional[str] = None
-    for box in soup.select(".content-box.sidebar-light.content-foot, .content-box.content-foot.sidebar-light"):
-        label = box.select_one("p")
+    for row in soup.select(".meta-grid .grid-row, .content-box.sidebar-light.content-foot, .content-box.content-foot.sidebar-light"):
+        label = row.select_one(".row-label, p")
         if not label or "aired" not in label.get_text(" ", strip=True).lower():
             continue
-        value = box.select_one(".label-primary")
+        value = row.select_one(".row-value, .label-primary")
         if value:
             upload_date = value.get_text(strip=True)
             break
@@ -709,6 +802,9 @@ async def scrape(url: str) -> dict[str, Any]:
         soup = BeautifulSoup(watch_html, "lxml")
         title = _clean_title(
             _first_non_empty(
+                soup.select_one(".section-header h2").get_text(strip=True)
+                if soup.select_one(".section-header h2")
+                else None,
                 soup.select_one("h1").get_text(strip=True) if soup.select_one("h1") else None,
                 _meta(soup, prop="og:title"),
                 soup.title.get_text(strip=True) if soup.title else None,
@@ -720,8 +816,8 @@ async def scrape(url: str) -> dict[str, Any]:
             "description": _first_non_empty(_meta(soup, prop="og:description"), _meta(soup, name="description")),
             "thumbnail_url": _first_non_empty(
                 _meta(soup, prop="og:image"),
-                _normalize_media_url(soup.select_one("img.img-responsive").get("src"))
-                if soup.select_one("img.img-responsive")
+                _normalize_media_url(soup.select_one(".post-sidebar img, img.img-responsive").get("src"))
+                if soup.select_one(".post-sidebar img, img.img-responsive")
                 else None,
             ),
             "duration": None,
