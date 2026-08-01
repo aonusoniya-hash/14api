@@ -200,6 +200,7 @@ async def _fetch_with_curl_cffi(
         try:
             async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
                 session = cast(Any, client)
+                await session.get(BASE_SITE)
                 if method.upper() == "POST":
                     post_headers = {
                         **headers,
@@ -208,10 +209,48 @@ async def _fetch_with_curl_cffi(
                     resp = await session.post(url, data=data or {}, headers=post_headers)
                 else:
                     resp = await session.get(url)
-                if resp.status_code == 200:
+                if resp.status_code == 200 and resp.text:
                     return resp.text
         except Exception:
             continue
+    return None
+
+
+async def _fetch_with_httpx(
+    url: str,
+    *,
+    referer: str | None = None,
+    method: str = "GET",
+    data: dict[str, str] | list[tuple[str, str]] | None = None,
+) -> Optional[str]:
+    try:
+        import httpx
+    except ImportError:
+        return None
+
+    headers = dict(_DEFAULT_HEADERS)
+    safe_referer = _safe_referer(referer)
+    if safe_referer:
+        headers["Referer"] = safe_referer
+
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=45.0) as client:
+            await client.get(BASE_SITE)
+            if method.upper() == "POST":
+                post_headers = {
+                    **headers,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
+                if isinstance(data, list):
+                    resp = await client.post(url, content=urlencode(data, doseq=True), headers=post_headers)
+                else:
+                    resp = await client.post(url, data=data or {}, headers=post_headers)
+            else:
+                resp = await client.get(url)
+            if resp.status_code == 200 and resp.text:
+                return resp.text
+    except Exception:
+        return None
     return None
 
 
@@ -226,6 +265,10 @@ async def _fetch_text(
     if text:
         return text
 
+    text = await _fetch_with_httpx(url, referer=referer, method=method, data=data)
+    if text:
+        return text
+
     from app.core.pool import fetch_html as pool_fetch_html
 
     headers = dict(_DEFAULT_HEADERS)
@@ -233,19 +276,7 @@ async def _fetch_text(
     if safe_referer:
         headers["Referer"] = safe_referer
     if method.upper() == "POST":
-        import httpx
-
-        post_headers = {
-            **headers,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        async with httpx.AsyncClient(headers=post_headers, follow_redirects=True, timeout=45.0) as client:
-            if isinstance(data, list):
-                resp = await client.post(url, content=urlencode(data, doseq=True))
-            else:
-                resp = await client.post(url, data=data or {})
-            resp.raise_for_status()
-            return resp.text
+        raise RuntimeError(f"PornHoarder POST blocked for {url}")
     return await pool_fetch_html(url, headers=headers)
 
 
