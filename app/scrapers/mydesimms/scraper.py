@@ -11,12 +11,22 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
+BASE_URL = "https://www.mydesi2.dev/"
+CANONICAL_HOST = "www.mydesi2.dev"
+_SUPPORTED_HOSTS = frozenset(
+    {
+        "mydesi2.dev",
+        "www.mydesi2.dev",
+        "mydesimms.watch",
+    }
+)
+
 
 def can_handle(host: str) -> bool:
     h = (host or "").lower().split(":")[0]
     if h.startswith("www."):
         h = h[4:]
-    return h == "mydesimms.watch" or h.endswith(".mydesimms.watch")
+    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch")
 
 
 def get_categories() -> list[dict]:
@@ -34,7 +44,7 @@ async def fetch_page(url: str) -> str:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://mydesimms.watch/",
+        "Referer": BASE_URL,
     }
     return await pool_fetch_html(url, headers=headers)
 
@@ -226,10 +236,10 @@ def _is_mydesimms_host(host: str) -> bool:
     h = (host or "").lower()
     if h.startswith("www."):
         h = h[4:]
-    return h == "mydesimms.watch" or h.endswith(".mydesimms.watch")
+    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch")
 
 
-def _normalize_media_url(src: str, base: str = "https://mydesimms.watch/") -> Optional[str]:
+def _normalize_media_url(src: str, base: str = BASE_URL) -> Optional[str]:
     u = (src or "").strip()
     if not u:
         return None
@@ -361,7 +371,7 @@ def _normalize_video_href(href: str) -> Optional[str]:
     if href.startswith("//"):
         href = f"https:{href}"
     elif href.startswith("/"):
-        href = f"https://mydesimms.watch{href}"
+        href = urljoin(BASE_URL, href)
     if not href.startswith("http"):
         return None
 
@@ -369,7 +379,7 @@ def _normalize_video_href(href: str) -> Optional[str]:
     host = (parsed.netloc or "").lower()
     if host.startswith("www."):
         host = host[4:]
-    if not (host == "mydesimms.watch" or host.endswith(".mydesimms.watch")):
+    if host not in _SUPPORTED_HOSTS and not host.endswith(".mydesimms.watch"):
         return None
 
     path_low = (parsed.path or "").lower()
@@ -399,7 +409,7 @@ def _normalize_video_href(href: str) -> Optional[str]:
     clean_path = re.sub(r"/{2,}", "/", parsed.path or "/").strip()
     if not clean_path or clean_path == "/":
         return None
-    return urlunparse(("https", "mydesimms.watch", clean_path if clean_path.endswith("/") else clean_path + "/", "", "", ""))
+    return urlunparse(("https", CANONICAL_HOST, clean_path if clean_path.endswith("/") else clean_path + "/", "", "", ""))
 
 
 def _collect_player_iframes(soup: BeautifulSoup) -> list[Any]:
@@ -530,8 +540,8 @@ def _extract_streams(soup: BeautifulSoup, html: str) -> dict[str, Any]:
         return (1, 0)
 
     # de-dupe
-    streams = list(dict.fromkeys((json.dumps(s, sort_keys=True) for s in streams)))
-    materialized = [json.loads(s) for s in streams]
+    deduped_keys = list(dict.fromkeys(json.dumps(s, sort_keys=True) for s in streams))
+    materialized: list[dict[str, str]] = [json.loads(s) for s in deduped_keys]
     materialized.sort(key=_score, reverse=True)
 
     default_url = None
@@ -565,11 +575,12 @@ def parse_video_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
     json_ld = _parse_json_ld(soup)
 
+    h1 = soup.select_one("h1")
     title = _clean_title(
         _first_non_empty(
             _meta(soup, prop="og:title"),
             _meta(soup, name="twitter:title"),
-            soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else None,
+            h1.get_text(" ", strip=True) if h1 else None,
             soup.title.get_text(strip=True) if soup.title else None,
         )
     ) or "Unknown Video"
@@ -660,7 +671,7 @@ def _build_list_page_url(base_url: str, page: int) -> str:
         raw = "https://" + raw.lstrip("/")
     parsed = urlparse(raw)
     scheme = parsed.scheme or "https"
-    netloc = parsed.netloc or "mydesimms.watch"
+    netloc = parsed.netloc or CANONICAL_HOST
     path = parsed.path or "/"
     query_items = dict(parse_qsl(parsed.query, keep_blank_values=True))
 
