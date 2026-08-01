@@ -514,6 +514,9 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "cdn.ulluwebseries.one" in parsed_url.netloc.lower() or
         "desithothub.com" in parsed_url.netloc.lower() or
         "streamtape.com" in parsed_url.netloc.lower() or
+        "streamtape.to" in parsed_url.netloc.lower() or
+        "dirtyvideo.fun" in parsed_url.netloc.lower() or
+        "minochinos.com" in parsed_url.netloc.lower() or
         "sendvid.com" in parsed_url.netloc.lower() or
         "motherless.com" in parsed_url.netloc.lower() or
         "motherless.xxx" in parsed_url.netloc.lower() or
@@ -677,6 +680,9 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "cdn.ulluwebseries.one" in host_l
             or "desithothub.com" in host_l
             or "streamtape.com" in host_l
+            or "streamtape.to" in host_l
+            or "dirtyvideo.fun" in host_l
+            or "minochinos.com" in host_l
             or "sendvid.com" in host_l
             or "motherless.com" in host_l
             or "motherless.xxx" in host_l

@@ -49,6 +49,11 @@ _IFRAME_SRC_RE = re.compile(
     r"""<iframe[^>]+src=["']([^"']+)["']""",
     re.IGNORECASE,
 )
+_EMBED_URL_RE = re.compile(
+    r"https?://[\w.-]+/(?:e|embed)/[A-Za-z0-9_-]+/?",
+    re.IGNORECASE,
+)
+_PLAYER_PAGE_RE = re.compile(r"player\.php", re.IGNORECASE)
 _DURATION_RE = re.compile(r"T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", re.IGNORECASE)
 
 
@@ -382,31 +387,48 @@ def _extract_player_url(html: str, page_url: str) -> Optional[str]:
     return None
 
 
+def _extract_embed_urls(html: str) -> list[str]:
+    if not html:
+        return []
+
+    urls: list[str] = []
+    seen: set[str] = set()
+    for match in _IFRAME_SRC_RE.finditer(html):
+        url = _normalize_media_url(match.group(1))
+        if not url or _PLAYER_PAGE_RE.search(url) or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+
+    for match in _EMBED_URL_RE.finditer(html):
+        url = _normalize_media_url(match.group(0))
+        if not url or _PLAYER_PAGE_RE.search(url) or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+
+    return urls
+
+
 async def _streams_from_player(player_url: str, *, referer: str) -> dict[str, Any]:
     streams: list[dict[str, str]] = []
-    seen: set[str] = set()
 
     posted = await _fetch_text(player_url, referer=referer, method="POST", data={"play": ""})
-    iframe_src = None
-    if posted:
-        m = _IFRAME_SRC_RE.search(posted)
-        if m:
-            iframe_src = _normalize_media_url(m.group(1))
+    embed_urls = _extract_embed_urls(posted or "")
+    if not embed_urls:
+        fallback = await _fetch_text(player_url, referer=referer)
+        embed_urls = _extract_embed_urls(fallback or "")
 
-    if iframe_src and iframe_src not in seen:
-        seen.add(iframe_src)
-        streams.append({"url": iframe_src, "quality": "embed", "format": "embed"})
+    for index, embed_url in enumerate(embed_urls):
+        quality = "embed" if index == 0 else f"embed{index + 1}"
+        streams.append({"url": embed_url, "quality": quality, "format": "embed"})
 
-    if player_url not in seen:
-        seen.add(player_url)
-        streams.append({"url": player_url, "quality": "player", "format": "embed"})
-
-    default = iframe_src or player_url
+    default = embed_urls[0] if embed_urls else None
     return {
         "streams": streams,
         "hls": None,
         "default": default,
-        "has_video": bool(streams),
+        "has_video": bool(embed_urls),
     }
 
 
@@ -514,6 +536,8 @@ async def scrape(url: str) -> dict[str, Any]:
         raise ValueError("Could not find PornHoarder player URL")
 
     data["video"] = await _streams_from_player(player_url, referer=canon)
+    if not data["video"].get("has_video"):
+        raise ValueError("Could not extract PornHoarder embed stream URL")
     return data
 
 
