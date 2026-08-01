@@ -4,7 +4,7 @@ import json
 import os
 import re
 from typing import Any, Optional, cast
-from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
@@ -161,12 +161,22 @@ def _normalize_video_href(href: str) -> Optional[str]:
     return _canonical_video_url(m.group("slug"), m.group("token"), host=host)
 
 
-def _encode_form_body(data: dict[str, str] | list[tuple[str, str]] | None) -> bytes:
-    if not data:
-        return b""
-    if isinstance(data, dict):
-        return urlencode(data).encode()
-    return urlencode(data, doseq=True).encode()
+def _safe_referer(url: str | None) -> str | None:
+    """Return an ASCII-safe referer for HTTP headers."""
+    if not url:
+        return None
+    try:
+        url.encode("ascii")
+        return url
+    except UnicodeEncodeError:
+        parsed = urlparse(url)
+        path = quote(parsed.path, safe="/%:@!$&'()*+,;=")
+        safe = urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, parsed.query, parsed.fragment))
+        try:
+            safe.encode("ascii")
+            return safe
+        except UnicodeEncodeError:
+            return BASE_SITE
 
 
 async def _fetch_with_curl_cffi(
@@ -182,8 +192,9 @@ async def _fetch_with_curl_cffi(
         return None
 
     headers = dict(_DEFAULT_HEADERS)
-    if referer:
-        headers["Referer"] = referer
+    safe_referer = _safe_referer(referer)
+    if safe_referer:
+        headers["Referer"] = safe_referer
 
     for imp in ("chrome120", "chrome110", "safari15_3"):
         try:
@@ -194,7 +205,7 @@ async def _fetch_with_curl_cffi(
                         **headers,
                         "Content-Type": "application/x-www-form-urlencoded",
                     }
-                    resp = await session.post(url, content=_encode_form_body(data), headers=post_headers)
+                    resp = await session.post(url, data=data or {}, headers=post_headers)
                 else:
                     resp = await session.get(url)
                 if resp.status_code == 200:
@@ -218,8 +229,9 @@ async def _fetch_text(
     from app.core.pool import fetch_html as pool_fetch_html
 
     headers = dict(_DEFAULT_HEADERS)
-    if referer:
-        headers["Referer"] = referer
+    safe_referer = _safe_referer(referer)
+    if safe_referer:
+        headers["Referer"] = safe_referer
     if method.upper() == "POST":
         import httpx
 
@@ -228,7 +240,10 @@ async def _fetch_text(
             "Content-Type": "application/x-www-form-urlencoded",
         }
         async with httpx.AsyncClient(headers=post_headers, follow_redirects=True, timeout=45.0) as client:
-            resp = await client.post(url, content=_encode_form_body(data))
+            if isinstance(data, list):
+                resp = await client.post(url, content=urlencode(data, doseq=True))
+            else:
+                resp = await client.post(url, data=data or {})
             resp.raise_for_status()
             return resp.text
     return await pool_fetch_html(url, headers=headers)
