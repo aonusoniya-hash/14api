@@ -526,6 +526,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "ok.xxx" in parsed_url.netloc.lower() or
         "static.ok.xxx" in parsed_url.netloc.lower() or
         "cdn.privatehost.com" in parsed_url.netloc.lower() or
+        "pornhoarder.org" in parsed_url.netloc.lower() or
+        "pornhoarder.io" in parsed_url.netloc.lower() or
         "pornhoarder.tw" in parsed_url.netloc.lower() or
         "pornhoarder.net" in parsed_url.netloc.lower() or
         "pornhoarder.pictures" in parsed_url.netloc.lower() or
@@ -686,6 +688,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "ok.xxx" in host_l
             or "static.ok.xxx" in host_l
             or "cdn.privatehost.com" in host_l
+            or "pornhoarder.org" in host_l
+            or "pornhoarder.io" in host_l
             or "pornhoarder.tw" in host_l
             or "pornhoarder.net" in host_l
             or "pornhoarder.pictures" in host_l

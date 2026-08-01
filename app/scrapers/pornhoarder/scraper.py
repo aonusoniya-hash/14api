@@ -8,11 +8,15 @@ from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urljoin, urlpars
 
 from bs4 import BeautifulSoup
 
-BASE_SITE = "https://ww2.pornhoarder.tw/"
-SITE_HOST = "pornhoarder.tw"
+BASE_SITE = "https://pornhoarder.org/"
+SITE_HOST = "pornhoarder.org"
 PLAYER_SITE = "https://pornhoarder.net/"
 SITE_ALIASES = frozenset(
     {
+        "pornhoarder.org",
+        "www.pornhoarder.org",
+        "pornhoarder.io",
+        "www.pornhoarder.io",
         "pornhoarder.tw",
         "ww2.pornhoarder.tw",
         "www.pornhoarder.tw",
@@ -34,7 +38,7 @@ _DEFAULT_HEADERS = {
 }
 
 _VIDEO_HREF_RE = re.compile(
-    r"pornhoarder\.(?:tw|net)/video/(?P<slug>[^/]+)/(?P<token>[^/?#]+)/?",
+    r"pornhoarder\.(?:org|io|tw|net)/video/(?P<slug>[^/]+)/(?P<token>[^/?#]+)/?",
     re.IGNORECASE,
 )
 _PLAYER_URL_RE = re.compile(
@@ -54,7 +58,12 @@ def can_handle(host: str) -> bool:
         h = h[4:]
     if h in SITE_ALIASES:
         return True
-    return h.endswith(".pornhoarder.tw") or h.endswith(".pornhoarder.net")
+    return (
+        h.endswith(".pornhoarder.org")
+        or h.endswith(".pornhoarder.tw")
+        or h.endswith(".pornhoarder.net")
+        or h == "pornhoarder.io"
+    )
 
 
 def get_categories() -> list[dict]:
@@ -114,9 +123,13 @@ def _normalize_site_host(host: str) -> str:
     h = (host or SITE_HOST).lower().split(":")[0]
     if h.startswith("www."):
         h = h[4:]
+    if h == "pornhoarder.io":
+        return "pornhoarder.io"
+    if h.endswith(".pornhoarder.org") or h == "pornhoarder.org":
+        return "pornhoarder.org"
     if h in SITE_ALIASES or h.endswith(".pornhoarder.tw"):
-        return h if h.endswith(".pornhoarder.tw") else "ww2.pornhoarder.tw"
-    return "ww2.pornhoarder.tw"
+        return SITE_HOST
+    return SITE_HOST
 
 
 def _parse_duration(value: str | None) -> Optional[str]:
@@ -141,7 +154,7 @@ def _extract_video_parts(url: str) -> tuple[Optional[str], Optional[str]]:
     return m.group("slug"), m.group("token")
 
 
-def _canonical_video_url(slug: str, token: str, *, host: str = "ww2.pornhoarder.tw") -> str:
+def _canonical_video_url(slug: str, token: str, *, host: str = SITE_HOST) -> str:
     return f"https://{host}/video/{slug.strip('/')}/{token.strip('/')}/"
 
 
