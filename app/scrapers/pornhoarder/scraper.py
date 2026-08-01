@@ -197,16 +197,56 @@ def _safe_referer(url: str | None) -> str | None:
             return BASE_SITE
 
 
+def _proxy_url() -> Optional[str]:
+    from app.config.settings import settings
+
+    direct = (getattr(settings, "PORNHORDER_PROXY_URL", None) or os.getenv("PORNHORDER_PROXY_URL") or "").strip()
+    if direct:
+        return direct
+
+    username = (getattr(settings, "PORNHORDER_PROXY_USERNAME", None) or os.getenv("PORNHORDER_PROXY_USERNAME") or "").strip()
+    password = (getattr(settings, "PORNHORDER_PROXY_PASSWORD", None) or os.getenv("PORNHORDER_PROXY_PASSWORD") or "").strip()
+    if not username or not password:
+        return None
+
+    host = (getattr(settings, "PORNHORDER_PROXY_HOST", None) or os.getenv("PORNHORDER_PROXY_HOST") or "p.webshare.io").strip()
+    port = getattr(settings, "PORNHORDER_PROXY_PORT", None) or os.getenv("PORNHORDER_PROXY_PORT") or 80
+    user = quote(username, safe="")
+    pwd = quote(password, safe="")
+    return f"http://{user}:{pwd}@{host}:{port}/"
+
+
+def _proxy_dict(use_proxy: bool) -> Optional[dict[str, str]]:
+    if not use_proxy:
+        return None
+    url = _proxy_url()
+    if not url:
+        return None
+    return {"http": url, "https": url}
+
+
+def _fetch_attempt_order() -> list[bool]:
+    """Prefer rotating proxy when configured; always keep a direct fallback."""
+    if _proxy_url():
+        return [True, False]
+    return [False]
+
+
 async def _fetch_with_curl_cffi(
     url: str,
     *,
     referer: str | None = None,
     method: str = "GET",
     data: dict[str, str] | list[tuple[str, str]] | None = None,
+    use_proxy: bool = False,
 ) -> Optional[str]:
     try:
         from curl_cffi.requests import AsyncSession
     except ImportError:
+        return None
+
+    proxies = _proxy_dict(use_proxy)
+    if use_proxy and not proxies:
         return None
 
     headers = dict(_DEFAULT_HEADERS)
@@ -214,9 +254,17 @@ async def _fetch_with_curl_cffi(
     if safe_referer:
         headers["Referer"] = safe_referer
 
+    blocked_statuses = {403, 429, 503}
     for imp in ("chrome120", "chrome110", "safari15_3"):
         try:
-            async with AsyncSession(impersonate=imp, headers=headers, timeout=45.0) as client:
+            session_kwargs: dict[str, Any] = {
+                "impersonate": imp,
+                "headers": headers,
+                "timeout": 45.0,
+            }
+            if proxies:
+                session_kwargs["proxies"] = proxies
+            async with AsyncSession(**session_kwargs) as client:
                 session = cast(Any, client)
                 await session.get(BASE_SITE)
                 if method.upper() == "POST":
@@ -229,6 +277,8 @@ async def _fetch_with_curl_cffi(
                     resp = await session.get(url)
                 if resp.status_code == 200 and resp.text:
                     return resp.text
+                if resp.status_code in blocked_statuses:
+                    continue
         except Exception:
             continue
     return None
@@ -240,10 +290,15 @@ async def _fetch_with_httpx(
     referer: str | None = None,
     method: str = "GET",
     data: dict[str, str] | list[tuple[str, str]] | None = None,
+    use_proxy: bool = False,
 ) -> Optional[str]:
     try:
         import httpx
     except ImportError:
+        return None
+
+    proxy_url = _proxy_url() if use_proxy else None
+    if use_proxy and not proxy_url:
         return None
 
     headers = dict(_DEFAULT_HEADERS)
@@ -252,7 +307,14 @@ async def _fetch_with_httpx(
         headers["Referer"] = safe_referer
 
     try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=45.0) as client:
+        client_kwargs: dict[str, Any] = {
+            "headers": headers,
+            "follow_redirects": True,
+            "timeout": 45.0,
+        }
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+        async with httpx.AsyncClient(**client_kwargs) as client:
             await client.get(BASE_SITE)
             if method.upper() == "POST":
                 post_headers = {
@@ -279,13 +341,26 @@ async def _fetch_text(
     method: str = "GET",
     data: dict[str, str] | list[tuple[str, str]] | None = None,
 ) -> str:
-    text = await _fetch_with_curl_cffi(url, referer=referer, method=method, data=data)
-    if text:
-        return text
+    for use_proxy in _fetch_attempt_order():
+        text = await _fetch_with_curl_cffi(
+            url,
+            referer=referer,
+            method=method,
+            data=data,
+            use_proxy=use_proxy,
+        )
+        if text:
+            return text
 
-    text = await _fetch_with_httpx(url, referer=referer, method=method, data=data)
-    if text:
-        return text
+        text = await _fetch_with_httpx(
+            url,
+            referer=referer,
+            method=method,
+            data=data,
+            use_proxy=use_proxy,
+        )
+        if text:
+            return text
 
     from app.core.pool import fetch_html as pool_fetch_html
 
@@ -295,6 +370,13 @@ async def _fetch_text(
         headers["Referer"] = safe_referer
     if method.upper() == "POST":
         raise RuntimeError(f"PornHoarder POST blocked for {url}")
+
+    proxy_url = _proxy_url()
+    if proxy_url:
+        try:
+            return await pool_fetch_html(url, headers=headers, proxy=proxy_url)
+        except Exception:
+            pass
     return await pool_fetch_html(url, headers=headers)
 
 
