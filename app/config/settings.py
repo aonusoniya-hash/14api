@@ -45,13 +45,6 @@ class Settings(BaseSettings):
     SCRAPER_TIMEOUT: int = 30
     SCRAPER_MAX_RETRIES: int = 3
     SCRAPER_RETRY_DELAY: int = 2
-
-    # PornHoarder rotating proxy (Webshare or any HTTP proxy URL)
-    PORNHORDER_PROXY_URL: str = ""
-    PORNHORDER_PROXY_HOST: str = "p.webshare.io"
-    PORNHORDER_PROXY_PORT: int = 80
-    PORNHORDER_PROXY_USERNAME: str = ""
-    PORNHORDER_PROXY_PASSWORD: str = ""
     
     # HLS Proxy
     HLS_PROXY_ENABLED: bool = True
