@@ -4757,3 +4757,92 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=teamskeettube"
 
 curl "http://127.0.0.1:8000/api/v1/videos/info?url=https://www.teamskeettube.com/video/pervz-chloe-temple-concept-charmed/"
 ```
+
+## Sosalkino (sosalkino.guru) Implementation Notes
+
+[Sosalkino](https://wvw.sosalkino.guru/) is a Russian KVS/kt_player tube site with slug-based watch URLs under `/videos/`, signed `/get_file/` MP4 links in inline `flashvars`, and numeric path pagination.
+
+### Host aliases
+
+- `wvw.sosalkino.guru` (current working mirror)
+- `sosalkino.guru`
+- `www.sosalkino.guru`
+- `sosalkino.ooo`
+- `www.sosalkino.ooo`
+
+Example:
+
+```python
+def can_handle(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    if h in {"sosalkino.guru", "wvw.sosalkino.guru", "sosalkino.ooo"}:
+        return True
+    return h.endswith(".sosalkino.guru") or h.endswith(".sosalkino.ooo")
+```
+
+### Listing and pagination (`list_videos`)
+
+- Home: `https://wvw.sosalkino.guru/`
+- Latest: `https://wvw.sosalkino.guru/latest-updates/`
+- Top rated: `https://wvw.sosalkino.guru/top-rated/`
+- Most popular: `https://wvw.sosalkino.guru/most-popular/`
+- Short clips: `https://wvw.sosalkino.guru/short/`
+- Category: `https://wvw.sosalkino.guru/categories/{slug}/`
+
+**Pagination:** append `/{page}/` to the list path (page 1 omits the page segment). Examples:
+
+- Page 2 home: `https://wvw.sosalkino.guru/2/`
+- Page 2 category: `https://wvw.sosalkino.guru/categories/anal/2/`
+
+Do **not** use `?page=` — Sosalkino ignores that query param.
+
+Parse cards from `div.item > a.link[href*='/videos/']`. Thumbnails use lazy-loaded `data-src` / `data-webp`; preview clips are in `data-preview` on `.img-holder`.
+
+Use `curl_cffi` (Chrome impersonation) with `Referer: https://wvw.sosalkino.guru/`.
+
+### Metadata and streams (`scrape`)
+
+- **Watch URL shape:** `https://wvw.sosalkino.guru/videos/{slug}/`
+- **Embed URL shape:** `https://wvw.sosalkino.guru/embed/{video_id}/`
+- **Metadata:** Open Graph (`og:title`, `og:image`, `og:duration`, `og:description`), inline `flashvars` (`video_title`, `video_categories`, `video_models`, `video_id`)
+- **Streams:** signed progressive MP4 links from `flashvars`:
+  - `video_url` + `video_url_text`
+  - `video_alt_url` + `video_alt_url_text`
+  - `video_alt_url2` + `video_alt_url2_text`
+  - `video_alt_url3` + `video_alt_url3_text`
+- Resolve `/get_file/` redirects with `Referer` set to the watch page URL.
+- Prefer `og:duration` over related-video `.duration` spans on watch pages.
+
+### Categories (`get_categories`)
+
+`categories.json` has 163 entries: Home, Latest Updates, Top Rated, Most Popular, Short Videos, plus category feeds scraped from the site header.
+
+### Registration checklist for Sosalkino
+
+Package folder: `backend/app/scrapers/sosalkino/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` with aliases `sosalkino`, `sosalkino.guru`, `wvw.sosalkino.guru`, `sosalkino.ooo`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="sosalkino"`)
+
+### Sosalkino verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://wvw.sosalkino.guru/videos/fotosessiya-12-letney-davnosti/\"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://wvw.sosalkino.guru/categories/anal&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://wvw.sosalkino.guru/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=sosalkino"
+
+curl "http://127.0.0.1:8000/api/v1/videos/info?url=https://wvw.sosalkino.guru/videos/fotosessiya-12-letney-davnosti/"
+```
