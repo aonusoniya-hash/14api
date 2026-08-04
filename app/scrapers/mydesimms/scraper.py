@@ -11,22 +11,34 @@ from bs4 import BeautifulSoup
 
 from app.core.pool import fetch_html as pool_fetch_html
 
-BASE_URL = "https://www.mydesi2.dev/"
-CANONICAL_HOST = "www.mydesi2.dev"
+BASE_URL = "https://mydesix10.watch/"
+CANONICAL_HOST = "mydesix10.watch"
 _SUPPORTED_HOSTS = frozenset(
     {
         "mydesi2.dev",
         "www.mydesi2.dev",
         "mydesimms.watch",
+        "mydesix10.watch",
+        "www.mydesix10.watch",
     }
 )
+_MYDESI_WATCH_RE = re.compile(r"^mydesi[a-z0-9]+\.watch$")
 
 
-def can_handle(host: str) -> bool:
+def _normalize_host(host: str) -> str:
     h = (host or "").lower().split(":")[0]
     if h.startswith("www."):
         h = h[4:]
-    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch")
+    return h
+
+
+def _is_mydesi_watch_host(host: str) -> bool:
+    return bool(_MYDESI_WATCH_RE.match(_normalize_host(host)))
+
+
+def can_handle(host: str) -> bool:
+    h = _normalize_host(host)
+    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch") or _is_mydesi_watch_host(h)
 
 
 def get_categories() -> list[dict]:
@@ -233,10 +245,8 @@ def _quality_from_embed_url(url: str, *, fallback_idx: int = 1) -> str:
 
 
 def _is_mydesimms_host(host: str) -> bool:
-    h = (host or "").lower()
-    if h.startswith("www."):
-        h = h[4:]
-    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch")
+    h = _normalize_host(host)
+    return h in _SUPPORTED_HOSTS or h.endswith(".mydesimms.watch") or _is_mydesi_watch_host(h)
 
 
 def _normalize_media_url(src: str, base: str = BASE_URL) -> Optional[str]:
@@ -379,7 +389,7 @@ def _normalize_video_href(href: str) -> Optional[str]:
     host = (parsed.netloc or "").lower()
     if host.startswith("www."):
         host = host[4:]
-    if host not in _SUPPORTED_HOSTS and not host.endswith(".mydesimms.watch"):
+    if host not in _SUPPORTED_HOSTS and not host.endswith(".mydesimms.watch") and not _is_mydesi_watch_host(host):
         return None
 
     path_low = (parsed.path or "").lower()

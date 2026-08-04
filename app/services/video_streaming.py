@@ -479,6 +479,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "uncutmaza.xxx" in parsed_url.netloc.lower() or
         "mydesi2.dev" in parsed_url.netloc.lower() or
         "mydesimms.watch" in parsed_url.netloc.lower() or
+        "mydesix10.watch" in parsed_url.netloc.lower() or
         "85po.com" in parsed_url.netloc.lower() or
         "cosxplay.com" in parsed_url.netloc.lower() or
         "memojav.com" in parsed_url.netloc.lower() or
@@ -644,6 +645,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             or "uncutmaza.xxx" in host_l
             or "mydesi2.dev" in host_l
             or "mydesimms.watch" in host_l
+            or "mydesix10.watch" in host_l
             or "85po.com" in host_l
             or "cosxplay.com" in host_l
             or "memojav.com" in host_l
