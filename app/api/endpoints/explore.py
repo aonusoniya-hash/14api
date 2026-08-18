@@ -180,7 +180,7 @@ EXPLORE_SOURCES = [
         hasCategories=True,
         searchUrlTemplate="https://spankbang.party/s/{query}/",
         sourceId="spankbang",
-        disable=False,
+        disable=True,
     ),
     ExploreSourceResponse(
         baseUrl="https://fapnut.net/",
