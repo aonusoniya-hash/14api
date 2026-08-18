@@ -3484,6 +3484,93 @@ curl "http://127.0.0.1:8000/api/v1/categories?source=hotmovs"
 curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://hotmovs.tube/videos/13168711/theresa-morning-videos-johntronx/"
 ```
 
+## ShemaleZ (shemalez.com) Implementation Notes
+
+[ShemaleZ](https://shemalez.com/) is a Tubecup-network tube site (same JSON API stack as [TXXX](https://txxx.com/) and [HotMovs](https://hotmovs.tube/)). It serves JSON list/metadata APIs and obfuscated CDN stream URLs. Watch URLs use a numeric ID and slug: `https://shemalez.com/videos/{id}/{slug}/` (e.g. `/videos/868054/roc-khard-shemale-domination-threesome-sex-for-halloween/`). Embed fallback: `https://shemalez.com/embed/{id}`.
+
+### Host aliases
+
+- `shemalez.com`
+- `www.shemalez.com`
+- `tn.shemalez.com` (thumbnails/CDN)
+- Any `*.shemalez.com` subdomain (handled via `can_handle()` suffix match)
+
+Stream CDN hosts resolve to `*.ahcdn.com` (e.g. `shemalez.ahcdn.com`) — already covered by the global `ahcdn.com` allowlist in `schemas.py` and `video_streaming.py`.
+
+### Listing and pagination (`list_videos`)
+
+Uses the Tubecup JSON API — not HTML scraping:
+
+- **Latest:** `https://shemalez.com/latest-updates/` (page 2+ → `/latest-updates/2/`)
+- **Sort feeds:** `/most-popular/`, `/longest/`, `/top-rated/`, `/most-viewed/`
+- **Categories:** `/categories/{slug}/` (page 2+ → `/categories/{slug}/2/`)
+- **Search:** `/search/?s={query}`
+
+List endpoint:
+
+```text
+GET /api/videos2.php?params={lifetime}/str/{sort}/{count}/{section}.{object_id}.{page}.all..
+```
+
+Search adds `&s={query}` with `sort=relevance`. Response shape: `{ "videos": [ ... ], "total_count", "pages" }`.
+
+Use `curl_cffi` (Chrome impersonation) as primary fetch — plain httpx/aiohttp may be blocked or TLS-fail on this host.
+
+### Metadata and streams (`scrape`)
+
+1. **Video info:** `GET /api/json/video/{lifetime}/{million_bucket}/{thousand_bucket}/{id}.json`
+   - Example: `/api/json/video/86400/0/868000/868054.json`
+   - `million_bucket = int(1e6 * (id // 1e6))`, `thousand_bucket = 1000 * (id // 1000)`
+2. **Stream files:** `GET /api/videofile.php?video_id={id}&lifetime=8640000`
+   - Returns array of `{ format, video_url }` where `video_url` is custom-base64-encoded
+3. **Decode streams:** translate Cyrillic look-alike chars + `,`/`.`/`~` → standard base64, then decode to CDN URL (often `/get_file/...` on `*.ahcdn.com`)
+4. **Resolve `/get_file/`:** follow redirect (no auto-redirect) to signed MP4/HLS URL
+5. **Embed fallback:** `https://{host}/embed/{id}` when direct streams fail
+
+Embed URLs (`/embed/{id}`) are accepted by `scrape()` — the numeric id is extracted and full metadata/streams are resolved the same way as watch-page URLs.
+
+### Preview clips
+
+The API `pv` field is often stale/wrong. Build preview URLs from video id when `pv` does not contain the id:
+
+```text
+https://vp2.txxx.com/c12/videos/{1000*(id//1000)}/{id}/{id}_tr.mp4
+```
+
+(Same shared Tubecup preview CDN as TXXX/HotMovs.)
+
+### Categories (`get_categories`)
+
+Latest Updates, sort feeds, and sample category slugs in `categories.json` (HD, Shemale, Ladyboy, Solo, Anal, Asian, etc.).
+
+### Registration checklist for ShemaleZ
+
+Package folder: `backend/app/scrapers/shemalez/`.
+
+Also update:
+
+- `backend/app/scrapers/__init__.py`
+- `backend/app/main.py` (import, `_scrape_dispatch`, `_list_dispatch`, `/api/v1/categories` — source aliases: `shemalez`, `shemaleZ`)
+- `backend/app/services/video_streaming.py` (scraper branch, supported-host text, quality map)
+- `backend/app/models/schemas.py` (scrape/list URL allowlists)
+- `backend/app/api/endpoints/explore.py` (`sourceId="shemalez"`)
+
+### ShemaleZ verification examples
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/scrapes   -H "Content-Type: application/json"   -d "{"url":"https://shemalez.com/videos/868054/roc-khard-shemale-domination-threesome-sex-for-halloween/"}"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://shemalez.com/latest-updates/&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://shemalez.com/categories/anal/&page=2&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/videos?base_url=https://shemalez.com/search/?s=anal&page=1&limit=20"
+
+curl "http://127.0.0.1:8000/api/v1/categories?source=shemalez"
+
+curl "http://127.0.0.1:8000/api/v1/videos/stream?url=https://shemalez.com/videos/868054/roc-khard-shemale-domination-threesome-sex-for-halloween/"
+```
+
 ## PornDig (porndig.com) Implementation Notes
 
 [PornDig](https://www.porndig.com/) is a modern tube site using a custom VHS player on `videos.porndig.com`. Watch URLs use a numeric post ID and slug: `https://www.porndig.com/videos/{id}/{slug}.html` (e.g. `/videos/254839/hayley-davies-hopes-he-ll-shove-it-all-the-way-inside-her.html`).

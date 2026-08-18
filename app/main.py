@@ -33,7 +33,7 @@ from app.api.endpoints import hls, media, explore, thumbnails, one_xbet, ads, do
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, henvids, muchohentai, underhentai, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, hotmovs, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91, letsporn, teamskeettube, sosalkino
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex, tube8, pornhat, brazzpw, gosexpod, watcherotic, rule34video, haho, hanime, hanime1, hentaihaven, animeidhentai, hentaicity, hentaimama, hentaibros, henvids, muchohentai, underhentai, hentaiocean, hentaverse, hstream, anibd, rouvideo, cg51, oppai, xmoviesforyou, tnaflix, hornysimp, pimpbunny, hentaiser, bollywoodmaal, viralkand, blowjobspro, blackporn24, lesbianporn8, leslez, milfporn8, indianporn365, mmsbro, kamababa, desimms2, desiporn, thotsporn, leakedamateurporn, zeenite, uncutmaza, mydesimms, po85, cosxplay, memojav, hohoj, ggjav, porn87, goodav, kanav, missav, jable, tianmei, bindasmood, eporner, dotmaal, uncutmasti, zmaal, ulluwebseries, desithothub, motherless, youjizz, pornone, threemovs, porndig, txxx, hotmovs, shemalez, okxxx, pornhoarder, yesporn, justporn, porngo, oneporn, thepornbang, pornhd3x, javfun, pornhd4k, pornhouse, porn91, letsporn, teamskeettube, sosalkino
 from app.models.schemas import ScrapeResponse, VideoInfoResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -214,6 +214,7 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, Any]:
     if porndig.can_handle(host): return await porndig.scrape(url)
     if txxx.can_handle(host): return await txxx.scrape(url)
     if hotmovs.can_handle(host): return await hotmovs.scrape(url)
+    if shemalez.can_handle(host): return await shemalez.scrape(url)
     if okxxx.can_handle(host): return await okxxx.scrape(url)
     if pornhoarder.can_handle(host): return await pornhoarder.scrape(url)
     if yesporn.can_handle(host): return await yesporn.scrape(url)
@@ -317,6 +318,7 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if porndig.can_handle(host): return await porndig.list_videos(base_url=base_url, page=page, limit=limit)
     if txxx.can_handle(host): return await txxx.list_videos(base_url=base_url, page=page, limit=limit)
     if hotmovs.can_handle(host): return await hotmovs.list_videos(base_url=base_url, page=page, limit=limit)
+    if shemalez.can_handle(host): return await shemalez.list_videos(base_url=base_url, page=page, limit=limit)
     if okxxx.can_handle(host): return await okxxx.list_videos(base_url=base_url, page=page, limit=limit)
     if pornhoarder.can_handle(host): return await pornhoarder.list_videos(base_url=base_url, page=page, limit=limit)
     if yesporn.can_handle(host): return await yesporn.list_videos(base_url=base_url, page=page, limit=limit)
@@ -558,6 +560,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s == "porndig": return [_category_item(c) for c in porndig.get_categories()]
         if s == "txxx": return [_category_item(c) for c in txxx.get_categories()]
         if s == "hotmovs": return [_category_item(c) for c in hotmovs.get_categories()]
+        if s in ("shemalez", "shemaleZ"): return [_category_item(c) for c in shemalez.get_categories()]
         if s in ("okxxx", "ok.xxx"): return [_category_item(c) for c in okxxx.get_categories()]
         if s in ("pornhoarder", "pornhoarder.tv"): return [_category_item(c) for c in pornhoarder.get_categories()]
         if s in ("yesporn", "yespornvip", "yesporn.vip"): return [_category_item(c) for c in yesporn.get_categories()]
